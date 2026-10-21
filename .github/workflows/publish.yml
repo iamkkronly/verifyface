@@ -1,12 +1,33 @@
-# verifyface release — Developer: Kaustav Kanti Ray
-# Publishes to PyPI when a tag like v1.0.0 is pushed.
-# Uses PyPI Trusted Publishing (no token in the repository).
+# verifyface release workflow — Developer: Kaustav Kanti Ray
+#
+# This workflow is manual on purpose. It only publishes when *you* ask for it.
+#
+# Option A — API token (works today, no extra setup):
+#   1. Create a token at https://pypi.org/manage/account/token/
+#   2. Add it as the repository secret PYPI_API_TOKEN
+#   3. Uncomment `password:` below
+#
+# Option B — Trusted Publishing (no secret at all, recommended):
+#   1. Register the publisher at
+#      https://pypi.org/manage/project/verifyface/settings/publishing/
+#      Owner: iamkkronly · Repository: verifyface · Workflow: publish.yml
+#      Environment: pypi
+#   2. Create an `pypi` environment in the repository settings
+#   3. Run this workflow from the Actions tab
+#
+# To also publish automatically on a tag, add:
+#   on:
+#     push:
+#       tags: ["v*"]
 name: Publish
 
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type 'publish' to confirm the upload to PyPI"
+        required: true
+        default: ""
 
 permissions:
   contents: read
@@ -14,15 +35,23 @@ permissions:
 
 jobs:
   build:
+    if: github.event.inputs.confirm == 'publish'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install build twine
-      - run: python -m build
-      - run: python -m twine check dist/*
+      - name: Install build tools
+        run: pip install build twine
+      - name: Test before releasing
+        run: |
+          pip install -e ".[dev]"
+          pytest -q
+      - name: Build
+        run: python -m build
+      - name: Check metadata
+        run: python -m twine check dist/*
       - uses: actions/upload-artifact@v4
         with:
           name: distributions
@@ -37,9 +66,8 @@ jobs:
         with:
           name: distributions
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          # trusted publishing needs this environment registered on PyPI;
-          # alternatively set the PYPI_API_TOKEN secret and use password:
-          #   password: ${{ secrets.PYPI_API_TOKEN }}
           packages-dir: dist/
+          # password: ${{ secrets.PYPI_API_TOKEN }}   # Option A

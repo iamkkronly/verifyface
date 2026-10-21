@@ -131,13 +131,13 @@ def make_handler(state: AppState):
             try:
                 data = json.loads(raw.decode("utf-8"))
             except Exception:
-                raise ValueError("Body must be JSON.")
+                raise ValueError("Body must be JSON.") from None
             if not isinstance(data, dict):
                 raise ValueError("Body must be a JSON object.")
             return data
 
         # -- static ------------------------------------------------------ #
-        def do_GET(self) -> None:  # noqa: N802
+        def do_GET(self) -> None:
             path = urlparse(self.path).path
             if path in {"/", "/index.html"}:
                 html = (WEBAPP_DIR / "index.html").read_bytes()
@@ -170,11 +170,11 @@ def make_handler(state: AppState):
                 return
             self._error(404, "Not found.")
 
-        def do_OPTIONS(self) -> None:  # noqa: N802
+        def do_OPTIONS(self) -> None:
             self._send(204, b"", "text/plain")
 
         # -- API --------------------------------------------------------- #
-        def do_POST(self) -> None:  # noqa: N802
+        def do_POST(self) -> None:
             path = urlparse(self.path).path
             try:
                 data = self._read_json()

@@ -73,6 +73,7 @@ __all__ = [
     "__author__",
     "__developer__",
     "__credit__",
+    "__email__",
     "__license__",
     "__url__",
     "BANNER",

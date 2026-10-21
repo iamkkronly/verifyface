@@ -31,7 +31,6 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from .errors import NoFaceFoundError
 from .imageio import load_image
 from .preprocess import DetectedFace, _estimate_pose
 
@@ -101,7 +100,6 @@ def passive_check(image, *, threshold: float = 0.45) -> Tuple[float, Tuple[str, 
         reasons.append("image is very soft (possible printed photo or screen)")
 
     # 2. Moiré: a strong periodic peak in the frequency spectrum ---------------
-    height, width = gray.shape[:2]
     size = 256
     resized = cv2.resize(gray, (size, size), interpolation=cv2.INTER_AREA)
     spectrum = np.abs(np.fft.fftshift(np.fft.fft2(resized.astype(np.float32))))

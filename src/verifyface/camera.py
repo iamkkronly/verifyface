@@ -19,8 +19,8 @@ Developer: Kaustav Kanti Ray
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from dataclasses import dataclass
+from typing import Any, Dict, Optional, Sequence
 
 import numpy as np
 
@@ -252,7 +252,7 @@ class LiveSession:
         liveness = self.tracker.report(passive_score=passive_score, reasons=reasons)
         if self.require_liveness and liveness.passed and passive_score < self.passive_threshold:
             liveness.passed = False
-            liveness.reasons = tuple(reasons) + ("looks like a screen or a printed photo",)
+            liveness.reasons = (*reasons, "looks like a screen or a printed photo")
 
         # 4. finish --------------------------------------------------------------
         if self.require_liveness and not liveness.passed:
@@ -369,7 +369,7 @@ def scan_live(
                 )
                 cv2.putText(
                     display,
-                    f"verifyface • Developer: Kaustav Kanti Ray",
+                    "verifyface • Developer: Kaustav Kanti Ray",
                     (12, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (170, 170, 170), 1, cv2.LINE_AA,
                 )
                 cv2.imshow(window_name, display)

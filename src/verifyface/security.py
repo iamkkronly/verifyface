@@ -26,7 +26,7 @@ import os
 import secrets
 import stat
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Tuple
 
 from .errors import StorageError
 

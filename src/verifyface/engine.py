@@ -20,7 +20,7 @@ import hashlib
 import os
 import threading
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -110,7 +110,7 @@ def download_models(target: Optional[Path] = None, *, force: bool = False) -> Pa
             request = urllib.request.Request(
                 MODEL_URLS[kind], headers={"User-Agent": f"verifyface/{_meta.__version__}"}
             )
-            with urllib.request.urlopen(request, timeout=120) as response, open(  # noqa: S310
+            with urllib.request.urlopen(request, timeout=120) as response, open(
                 temporary, "wb"
             ) as handle:
                 while True:

@@ -27,7 +27,7 @@ import os
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Union
 
 import numpy as np
 
@@ -90,7 +90,7 @@ def _from_url(url: str, *, timeout: float = 15.0) -> np.ndarray:
 
     request = urllib.request.Request(url, headers={"User-Agent": "verifyface/1.0"})
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             data = response.read(MAX_URL_BYTES + 1)
     except Exception as exc:
         raise ImageError(f"Could not download the image from {url}: {exc}") from None

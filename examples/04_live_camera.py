@@ -43,13 +43,9 @@ def main() -> int:
 
     verifier = vf.Verifier(vault="demo-vault")
 
-    if mode == "enroll":
-        session = vf.LiveSession(identity=identity, verifier=verifier, mode="enroll", actions=2)
-    else:
-        if not verifier.enrolled(identity):
-            print(f"{identity!r} is not enrolled yet — run the enroll mode first.")
-            return 2
-        session = vf.LiveSession(identity=identity, verifier=verifier, mode="verify", actions=2)
+    if mode == "verify" and not verifier.enrolled(identity):
+        print(f"{identity!r} is not enrolled yet — run the enroll mode first.")
+        return 2
 
     # The desktop helper drives the same state machine for you:
     result = vf.scan_live(

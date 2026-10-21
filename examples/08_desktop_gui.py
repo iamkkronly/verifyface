@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox
 
 import verifyface as vf
 
@@ -52,11 +52,13 @@ class App:
         self.name.pack(fill="x", padx=18, ipady=7)
         self.name.insert(0, "kaustav")
 
-        row1 = tk.Frame(card, bg=PANEL); row1.pack(fill="x", padx=18, pady=(16, 0))
+        row1 = tk.Frame(card, bg=PANEL)
+        row1.pack(fill="x", padx=18, pady=(16, 0))
         self._button(row1, "Enroll from file", self.enroll_file).pack(side="left")
         self._button(row1, "Enroll from camera", self.enroll_camera).pack(side="left", padx=8)
 
-        row2 = tk.Frame(card, bg=PANEL); row2.pack(fill="x", padx=18, pady=(10, 0))
+        row2 = tk.Frame(card, bg=PANEL)
+        row2.pack(fill="x", padx=18, pady=(10, 0))
         self._button(row2, "Verify from file", self.verify_file).pack(side="left")
         self._button(row2, "Verify with camera", self.verify_camera).pack(side="left", padx=8)
 
@@ -97,12 +99,14 @@ class App:
             try:
                 result = work()
             except vf.VerifyFaceError as exc:
-                self.root.after(0, lambda: self.say(f"Problem: {exc}"))
+                message = f"Problem: {exc}"
+                self.root.after(0, lambda text=message: self.say(text))
                 return
             except Exception as exc:  # pragma: no cover
-                self.root.after(0, lambda: self.say(f"Unexpected error: {exc}"))
+                message = f"Unexpected error: {exc}"
+                self.root.after(0, lambda text=message: self.say(text))
                 return
-            self.root.after(0, lambda: done(result))
+            self.root.after(0, lambda value=result: done(value))
 
         self.say("Working…")
         threading.Thread(target=runner, daemon=True).start()

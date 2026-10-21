@@ -12,9 +12,9 @@ import verifyface as vf
 from verifyface.integrations.flask_ext import init_app
 
 try:
-    from flask import Flask, jsonify, request
+    from flask import Flask, jsonify
 except ImportError:  # pragma: no cover
-    raise SystemExit('Flask is not installed. Run: pip install "verifyface[flask]"')
+    raise SystemExit('Flask is not installed. Run: pip install "verifyface[flask]"') from None
 
 app = Flask(__name__)
 verifier = init_app(app, url_prefix="/face", verifier=vf.Verifier(vault="demo-vault"))

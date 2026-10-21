@@ -18,7 +18,7 @@ from verifyface.integrations.fastapi_ext import install
 try:
     from fastapi import FastAPI
 except ImportError:  # pragma: no cover
-    raise SystemExit('FastAPI is not installed. Run: pip install "verifyface[fastapi]"')
+    raise SystemExit('FastAPI is not installed. Run: pip install "verifyface[fastapi]"') from None
 
 app = FastAPI(
     title="verifyface demo API",

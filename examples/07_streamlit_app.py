@@ -13,7 +13,7 @@ import verifyface as vf
 try:
     import streamlit as st
 except ImportError:  # pragma: no cover
-    raise SystemExit("Streamlit is not installed. Run: pip install streamlit")
+    raise SystemExit("Streamlit is not installed. Run: pip install streamlit") from None
 
 from verifyface.integrations.streamlit_ui import render
 

@@ -1,0 +1,31 @@
+# verifyface — Developer: Kaustav Kanti Ray
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.env
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+# never commit local biometric vaults or keys
+.vault/
+*.vault
+verifyface-vault/
+key.bin
+.vault/
+demo-vault/
+kiosk-vault/
+*.vault/
+attendance.csv
+captured.jpg

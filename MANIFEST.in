@@ -1,0 +1,16 @@
+# verifyface — Developer: Kaustav Kanti Ray
+include LICENSE
+include README.md
+include CHANGELOG.md
+include SECURITY.md
+include CONTRIBUTING.md
+include CODE_OF_CONDUCT.md
+include AUTHORS.md
+include requirements.txt
+recursive-include src/verifyface/models *.onnx *.txt *.md
+recursive-include src/verifyface/webapp *.html
+recursive-include docs *.md
+recursive-include examples *.py *.md
+recursive-include tests *.py *.md *.jpg
+include src/verifyface/py.typed
+global-exclude __pycache__ *.py[cod] .DS_Store

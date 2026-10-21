@@ -1,0 +1,100 @@
+# verifyface — Simple, private, offline face verification for Python.
+# Developer: Kaustav Kanti Ray
+# https://github.com/iamkkronly/verifyface
+# License: MIT
+
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "verifyface"
+version = "1.0.0"
+description = "Face verification that anyone can use: enroll once, verify anywhere. Offline, private, and robust to changes in clothing, lighting, and background."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Kaustav Kanti Ray", email = "iamkkronly@users.noreply.github.com" },
+]
+maintainers = [
+    { name = "Kaustav Kanti Ray", email = "iamkkronly@users.noreply.github.com" },
+]
+keywords = [
+    "face-recognition", "face-verification", "biometrics", "identity",
+    "sface", "yunet", "opencv", "offline", "privacy", "liveness",
+    "face-id", "authentication", "computer-vision",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+dependencies = [
+    "numpy>=1.21",
+    "opencv-python-headless>=4.8,<6",
+    "pillow>=9.0",
+]
+
+[project.optional-dependencies]
+camera = ["opencv-python>=4.8,<6"]
+secure = ["cryptography>=41"]
+fastapi = ["fastapi>=0.100", "python-multipart>=0.0.6"]
+flask = ["flask>=2.2"]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "build>=1.0",
+    "twine>=4.0",
+    "mypy>=1.5",
+    "ruff>=0.1",
+]
+all = ["verifyface[camera,secure,fastapi,flask]"]
+
+[project.urls]
+Homepage = "https://github.com/iamkkronly/verifyface"
+Repository = "https://github.com/iamkkronly/verifyface"
+Documentation = "https://github.com/iamkkronly/verifyface#readme"
+Issues = "https://github.com/iamkkronly/verifyface/issues"
+Changelog = "https://github.com/iamkkronly/verifyface/blob/main/CHANGELOG.md"
+"Source (Developer)" = "https://github.com/iamkkronly"
+
+[project.scripts]
+verifyface = "verifyface.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+verifyface = ["models/*.onnx", "models/*.txt", "models/*.md", "py.typed", "webapp/*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.mypy]
+python_version = "3.9"
+ignore_missing_imports = true
+warn_unused_ignores = false

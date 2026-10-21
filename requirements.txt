@@ -1,0 +1,9 @@
+# verifyface runtime requirements — Developer: Kaustav Kanti Ray
+numpy>=1.21
+opencv-python-headless>=4.8,<6
+pillow>=9.0
+
+# optional extras
+#   opencv-python>=4.8      # on-screen live camera preview  (pip install "verifyface[camera]")
+#   cryptography>=41        # AES-256-GCM vault encryption   (pip install "verifyface[secure]")
+#   fastapi, python-multipart, flask  # web integrations

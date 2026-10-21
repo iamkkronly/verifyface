@@ -1,0 +1,6 @@
+# verifyface — Developer: Kaustav Kanti Ray
+* text=auto eol=lf
+*.onnx binary
+*.jpg binary
+*.png binary
+*.bat text eol=crlf

@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<!--
+  verifyface — browser app
+  Developer: Kaustav Kanti Ray
+  https://github.com/iamkkronly/verifyface
+  No external resources: styles and scripts are inline, so it works offline.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>verifyface — face verification</title>
+<style>
+  :root{
+    --bg:#0b1020; --panel:#141b33; --panel2:#1b2442; --line:#26314f;
+    --text:#e9eefc; --muted:#9aa7c7; --accent:#6c8cff; --accent2:#39d0a3;
+    --danger:#ff6b81; --warn:#ffc85c; --radius:16px;
+    color-scheme: dark;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:radial-gradient(1100px 600px at 15% -10%, #1b2a63 0%, transparent 60%),
+                radial-gradient(900px 500px at 100% 0%, #123c34 0%, transparent 55%), var(--bg);
+    color:var(--text); font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Bengali",sans-serif;
+    min-height:100vh;
+  }
+  .wrap{max-width:1040px; margin:0 auto; padding:26px 18px 60px}
+  header{display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:22px}
+  .brand{display:flex; align-items:center; gap:12px}
+  .logo{width:44px;height:44px;border-radius:13px;background:linear-gradient(140deg,var(--accent),var(--accent2));
+        display:grid;place-items:center;box-shadow:0 10px 30px rgba(108,140,255,.35)}
+  .logo svg{width:26px;height:26px}
+  h1{font-size:20px;margin:0;letter-spacing:.2px}
+  .sub{font-size:12.5px;color:var(--muted);margin-top:3px}
+  .lang{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+  .lang button{background:transparent;border:0;color:var(--muted);padding:7px 14px;cursor:pointer;font-size:13px}
+  .lang button.on{background:var(--panel2);color:var(--text)}
+  .tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+  .tab{background:var(--panel);border:1px solid var(--line);color:var(--muted);padding:10px 16px;
+       border-radius:999px;cursor:pointer;font-size:14px;transition:.18s}
+  .tab.on{background:linear-gradient(140deg,rgba(108,140,255,.25),rgba(57,208,163,.18));color:var(--text);
+          border-color:#3b4c85}
+  .card{background:linear-gradient(180deg,var(--panel),#121a30);border:1px solid var(--line);
+        border-radius:var(--radius);padding:20px;box-shadow:0 20px 50px rgba(0,0,0,.28)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:820px){.grid{grid-template-columns:1fr}}
+  label{display:block;font-size:12.5px;color:var(--muted);margin:0 0 6px}
+  input[type=text],select{width:100%;background:#0d1428;border:1px solid var(--line);color:var(--text);
+        padding:12px 13px;border-radius:11px;font-size:14px;outline:none}
+  input[type=text]:focus,select:focus{border-color:var(--accent)}
+  .btn{border:0;border-radius:11px;padding:12px 18px;font-size:14px;cursor:pointer;font-weight:600;
+       background:linear-gradient(140deg,var(--accent),#8aa2ff);color:#08122e;transition:.16s}
+  .btn:hover{transform:translateY(-1px)}
+  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
+  .btn.danger{background:transparent;border:1px solid #5a2740;color:var(--danger)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .drop{border:1.5px dashed #33406b;border-radius:14px;padding:26px;text-align:center;color:var(--muted);
+        cursor:pointer;transition:.16s;background:#0d1428}
+  .drop:hover{border-color:var(--accent);color:var(--text)}
+  .thumbs{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+  .thumb{position:relative;width:86px;height:86px;border-radius:12px;overflow:hidden;border:1px solid var(--line)}
+  .thumb img{width:100%;height:100%;object-fit:cover}
+  .thumb button{position:absolute;top:3px;right:3px;background:rgba(0,0,0,.6);border:0;color:#fff;
+        border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:12px;line-height:1}
+  video{width:100%;border-radius:14px;background:#000;aspect-ratio:4/3;object-fit:cover}
+  .prompt{margin-top:12px;font-size:15px;min-height:24px}
+  .bar{height:8px;background:#0d1428;border-radius:999px;overflow:hidden;margin-top:10px;border:1px solid var(--line)}
+  .bar>i{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .25s}
+  .result{margin-top:14px;padding:14px 16px;border-radius:13px;border:1px solid var(--line);
+          background:#0d1428;font-size:14px;display:none}
+  .result.show{display:block}
+  .result.good{border-color:#1f6b52;background:linear-gradient(180deg,rgba(57,208,163,.14),rgba(57,208,163,.04))}
+  .result.bad{border-color:#6b2437;background:linear-gradient(180deg,rgba(255,107,129,.14),rgba(255,107,129,.04))}
+  .result .big{font-size:17px;font-weight:700;margin-bottom:6px}
+  .meta{color:var(--muted);font-size:12.5px;line-height:1.6}
+  .pill{display:inline-block;padding:3px 10px;border-radius:999px;background:var(--panel2);
+        border:1px solid var(--line);font-size:12px;color:var(--muted);margin-right:6px}
+  .list{margin-top:18px}
+  .person{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;
+          border:1px solid var(--line);border-radius:12px;background:#0d1428;margin-bottom:8px}
+  .person b{font-weight:600}
+  .hint{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.55}
+  footer{margin-top:26px;text-align:center;color:var(--muted);font-size:12.5px;line-height:1.7}
+  footer a{color:#9fb2ee}
+  .badge{font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:var(--accent2);
+         border:1px solid #1f6b52;padding:2px 8px;border-radius:999px}
+  .spin{width:15px;height:15px;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;
+        border-radius:50%;display:inline-block;animation:sp .8s linear infinite;vertical-align:-3px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .hidden{display:none !important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#0b1020" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="9" r="3.6"/><path d="M4.5 20c1.2-3.8 4-5.7 7.5-5.7S18.3 16.2 19.5 20"/>
+        </svg>
+      </div>
+      <div>
+        <h1>verifyface <span class="badge">local</span></h1>
+        <div class="sub" data-i18n="tagline">Enroll once. Verify anywhere. Nothing leaves this computer.</div>
+      </div>
+    </div>
+    <div class="lang" role="group" aria-label="language">
+      <button id="lang-en" class="on" onclick="setLang('en')">English</button>
+      <button id="lang-bn" onclick="setLang('bn')">বাংলা</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab on" data-tab="live" onclick="showTab('live')" data-i18n="tab_live">📷 Live scan</button>
+    <button class="tab" data-tab="photo" onclick="showTab('photo')" data-i18n="tab_photo">🖼️ Photo verify</button>
+    <button class="tab" data-tab="enroll" onclick="showTab('enroll')" data-i18n="tab_enroll">➕ Enroll</button>
+  </div>
+
+  <!-- ---------------------------------------------------------------- LIVE -->
+  <section id="tab-live" class="panel">
+    <div class="card">
+      <div class="grid">
+        <div>
+          <label data-i18n="who">Person</label>
+          <select id="live-name"></select>
+          <div class="hint" data-i18n="liveness_hint">
+            You will be asked to do two quick actions (turn your head, nod, blink…).
+            That proves a real person is in front of the camera.
+          </div>
+          <div class="row" style="margin-top:16px">
+            <button class="btn" id="live-start" onclick="startLive()" data-i18n="start_live">Start live scan</button>
+            <button class="btn ghost hidden" id="live-stop" onclick="stopLive()" data-i18n="stop">Stop</button>
+          </div>
+          <div class="prompt" id="live-prompt"></div>
+          <div class="bar"><i id="live-bar"></i></div>
+        </div>
+        <div>
+          <video id="live-video" autoplay muted playsinline></video>
+          <div class="hint" id="cam-hint"></div>
+        </div>
+      </div>
+      <div class="result" id="live-result"></div>
+    </div>
+  </section>
+
+  <!-- --------------------------------------------------------------- PHOTO -->
+  <section id="tab-photo" class="panel hidden">
+    <div class="card">
+      <div class="grid">
+        <div>
+          <label data-i18n="who">Person</label>
+          <select id="photo-name"></select>
+          <div class="hint" data-i18n="photo_hint">Upload a recent photo — different clothes, place or lighting is fine.</div>
+          <div class="row" style="margin-top:16px">
+            <button class="btn" id="photo-go" onclick="verifyPhoto()" data-i18n="verify_btn">Verify photo</button>
+            <button class="btn ghost" onclick="identifyPhoto()" data-i18n="identify_btn">Who is this?</button>
+          </div>
+        </div>
+        <div>
+          <div class="drop" onclick="document.getElementById('photo-file').click()">
+            <div style="font-size:26px">⬆</div>
+            <div data-i18n="drop">Click to choose a photo</div>
+          </div>
+          <input type="file" id="photo-file" accept="image/*" class="hidden" onchange="onPhoto(event)" />
+          <div class="thumbs" id="photo-thumb"></div>
+        </div>
+      </div>
+      <div class="result" id="photo-result"></div>
+    </div>
+  </section>
+
+  <!-- -------------------------------------------------------------- ENROLL -->
+  <section id="tab-enroll" class="panel hidden">
+    <div class="card">
+      <div class="grid">
+        <div>
+          <label data-i18n="name_label">Name (any language)</label>
+          <input type="text" id="enroll-name" placeholder="e.g. Kaustav / কৌস্তভ" />
+          <div class="hint" data-i18n="enroll_hint">
+            Add 1–3 photos taken on different days for the best results. Only a
+            mathematical template is stored — never the photo itself.
+          </div>
+          <div class="row" style="margin-top:16px">
+            <button class="btn" id="enroll-go" onclick="enroll()" data-i18n="enroll_btn">Enroll person</button>
+          </div>
+        </div>
+        <div>
+          <div class="drop" onclick="document.getElementById('enroll-files').click()">
+            <div style="font-size:26px">⬆</div>
+            <div data-i18n="drop_multi">Click to choose 1–3 photos</div>
+          </div>
+          <input type="file" id="enroll-files" accept="image/*" multiple class="hidden" onchange="onEnrollFiles(event)" />
+          <div class="thumbs" id="enroll-thumbs"></div>
+        </div>
+      </div>
+      <div class="result" id="enroll-result"></div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------- PEOPLE -->
+  <div class="card list" style="margin-top:18px">
+    <div class="row" style="justify-content:space-between">
+      <b data-i18n="enrolled_people">Enrolled people</b>
+      <button class="btn ghost" onclick="loadPeople()" data-i18n="refresh">Refresh</button>
+    </div>
+    <div id="people" style="margin-top:12px"></div>
+  </div>
+
+  <footer>
+    <div><b>verifyface</b> — <span data-i18n="footer_local">offline face verification for everyone</span></div>
+    <div>Developer: <b>Kaustav Kanti Ray</b> ·
+      <a href="https://github.com/iamkkronly/verifyface" target="_blank" rel="noopener">GitHub</a> ·
+      MIT License</div>
+  </footer>
+</div>
+
+<script>
+/* verifyface browser app — Developer: Kaustav Kanti Ray */
+const I18N = {
+  en: {
+    tagline: "Enroll once. Verify anywhere. Nothing leaves this computer.",
+    tab_live: "📷 Live scan", tab_photo: "🖼️ Photo verify", tab_enroll: "➕ Enroll",
+    who: "Person", start_live: "Start live scan", stop: "Stop",
+    liveness_hint: "You will be asked to do two quick actions (turn your head, nod, blink…). That proves a real person is in front of the camera.",
+    photo_hint: "Upload a recent photo — different clothes, place or lighting is fine.",
+    verify_btn: "Verify photo", identify_btn: "Who is this?",
+    drop: "Click to choose a photo", drop_multi: "Click to choose 1–3 photos",
+    name_label: "Name (any language)",
+    enroll_hint: "Add 1–3 photos taken on different days for the best results. Only a mathematical template is stored — never the photo itself.",
+    enroll_btn: "Enroll person", enrolled_people: "Enrolled people", refresh: "Refresh",
+    footer_local: "offline face verification for everyone",
+    no_people: "Nobody enrolled yet — start with the Enroll tab.",
+    camera_denied: "Camera not available here. Use the Photo verify tab instead.",
+    working: "Working…", verified: "VERIFIED", not_verified: "NOT verified",
+    similarity: "similarity", threshold: "threshold", confidence: "confidence",
+    enrolled_ok: "Enrolled", deleted: "Deleted", no_face: "No face found — try another photo.",
+    identify_none: "No enrolled person matched.", identify_ok: "Identified as",
+    live_ready: "Point the camera at your face and press start.",
+    need_name: "Please choose a person first.",
+    need_photo: "Please choose a photo first.",
+    need_enroll_name: "Please type a name.",
+    need_enroll_photo: "Please add at least one photo."
+  },
+  bn: {
+    tagline: "একবার নিবন্ধন করুন, যেকোনো জায়গায় যাচাই করুন। কিছুই এই কম্পিউটার ছাড়ে না।",
+    tab_live: "📷 লাইভ স্ক্যান", tab_photo: "🖼️ ছবি যাচাই", tab_enroll: "➕ নিবন্ধন",
+    who: "ব্যক্তি", start_live: "লাইভ স্ক্যান শুরু করুন", stop: "থামান",
+    liveness_hint: "আপনাকে দুটি সহজ কাজ করতে বলা হবে (মাথা ঘোরানো, মাথা নাড়ানো, চোখ পিটপিট করা…)। এতে প্রমাণ হয় সামনে সত্যিকারের মানুষ আছে।",
+    photo_hint: "সাম্প্রতিক একটি ছবি দিন — ভিন্ন পোশাক, জায়গা বা আলো হলেও সমস্যা নেই।",
+    verify_btn: "ছবি যাচাই করুন", identify_btn: "ইনি কে?",
+    drop: "ছবি বেছে নিতে ক্লিক করুন", drop_multi: "১–৩টি ছবি বেছে নিন",
+    name_label: "নাম (যেকোনো ভাষায়)",
+    enroll_hint: "সেরা ফলাফলের জন্য ভিন্ন দিনে তোলা ১–৩টি ছবি দিন। শুধু একটি গাণিতিক টেমপ্লেট সংরক্ষিত হয় — ছবি নয়।",
+    enroll_btn: "ব্যক্তি নিবন্ধন করুন", enrolled_people: "নিবন্ধিত ব্যক্তিরা", refresh: "রিফ্রেশ",
+    footer_local: "সবার জন্য অফলাইন ফেস যাচাই",
+    no_people: "এখনো কেউ নিবন্ধিত নয় — নিবন্ধন ট্যাব দিয়ে শুরু করুন।",
+    camera_denied: "এখানে ক্যামেরা পাওয়া যাচ্ছে না। ছবি যাচাই ট্যাব ব্যবহার করুন।",
+    working: "চলছে…", verified: "যাচাই হয়েছে", not_verified: "যাচাই হয়নি",
+    similarity: "মিল", threshold: "সীমা", confidence: "আত্মবিশ্বাস",
+    enrolled_ok: "নিবন্ধিত হয়েছে", deleted: "মুছে ফেলা হয়েছে", no_face: "মুখ পাওয়া যায়নি — অন্য ছবি দিন।",
+    identify_none: "নিবন্ধিত কারও সঙ্গে মেলেনি।", identify_ok: "শনাক্ত হয়েছে",
+    live_ready: "ক্যামেরার সামনে মুখ রাখুন, তারপর শুরু করুন।",
+    need_name: "আগে একজনকে বেছে নিন।",
+    need_photo: "আগে একটি ছবি দিন।",
+    need_enroll_name: "একটি নাম লিখুন।",
+    need_enroll_photo: "অন্তত একটি ছবি দিন।"
+  }
+};
+let lang = localStorage.getItem("vf-lang") || "en";
+const t = (k) => (I18N[lang][k] || I18N.en[k] || k);
+function setLang(l){ lang = l; localStorage.setItem("vf-lang", l);
+  document.getElementById("lang-en").classList.toggle("on", l==="en");
+  document.getElementById("lang-bn").classList.toggle("on", l==="bn");
+  document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = t(el.dataset.i18n); });
+  loadPeople();
+}
+
+/* ---------- helpers ---------- */
+const $ = (id) => document.getElementById(id);
+function showTab(name){
+  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.tab===name));
+  ["live","photo","enroll"].forEach(n => $("tab-"+n).classList.toggle("hidden", n!==name));
+  if(name!=="live") stopLive(true);
+}
+function showResult(id, good, title, meta){
+  const box = $(id);
+  box.className = "result show " + (good ? "good" : "bad");
+  box.innerHTML = `<div class="big">${title}</div><div class="meta">${meta||""}</div>`;
+}
+function showNeutral(id, html){
+  const box = $(id); box.className="result show"; box.innerHTML = `<div class="meta">${html}</div>`;
+}
+async function api(path, body){
+  const res = await fetch(path, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+  const data = await res.json().catch(()=>({ok:false,error:"Bad response"}));
+  if(!res.ok || data.ok===false) throw new Error(data.error || ("HTTP "+res.status));
+  return data;
+}
+function fileToDataURL(file){
+  return new Promise((resolve,reject)=>{
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+function resultMeta(d){
+  const parts = [];
+  if(d.score !== undefined) parts.push(`${t("similarity")}: <b>${Number(d.score).toFixed(3)}</b>`);
+  if(d.threshold !== undefined) parts.push(`${t("threshold")}: ${Number(d.threshold).toFixed(3)}`);
+  if(d.confidence !== undefined) parts.push(`${t("confidence")}: ${(Number(d.confidence)*100).toFixed(1)}%`);
+  if(d.quality && d.quality.passed === false) parts.push("⚠ " + (d.quality.issues||[]).join(", "));
+  if(d.liveness) parts.push("liveness: " + (d.liveness.passed ? "✔" : "✘"));
+  return parts.join(" · ");
+}
+
+/* ---------- people list ---------- */
+async function loadPeople(){
+  try{
+    const res = await fetch("/api/list"); const data = await res.json();
+    const people = data.identities || [];
+    const selects = [$("live-name"), $("photo-name")];
+    selects.forEach(sel => {
+      const current = sel.value;
+      sel.innerHTML = people.map(p => `<option value="${escapeHtml(p.identity)}">${escapeHtml(p.identity)}</option>`).join("");
+      if(current) sel.value = current;
+    });
+    $("people").innerHTML = people.length ? people.map(p => `
+      <div class="person">
+        <div><b>${escapeHtml(p.identity)}</b>
+          <span class="pill">${p.samples ?? "?"} ${lang==="bn"?"নমুনা":"sample(s)"}</span>
+          <span class="pill">${lang==="bn"?"মিল":"self-consistency"} ${(p.self_similarity??0).toFixed(2)}</span>
+        </div>
+        <button class="btn danger" onclick="removePerson('${escapeHtml(p.identity).replace(/'/g,"\\'")}')">${lang==="bn"?"মুছুন":"Delete"}</button>
+      </div>`).join("") : `<div class="meta">${t("no_people")}</div>`;
+  }catch(e){
+    $("people").innerHTML = `<div class="meta">${escapeHtml(e.message)}</div>`;
+  }
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+async function removePerson(name){
+  if(!confirm(`${lang==="bn"?"মুছে ফেলবেন":"Delete"} ${name}?`)) return;
+  try{ await api("/api/delete", {name}); loadPeople(); }catch(e){ alert(e.message); }
+}
+
+/* ---------- photo verify ---------- */
+let photoData = null;
+async function onPhoto(ev){
+  const file = ev.target.files[0]; if(!file) return;
+  photoData = await fileToDataURL(file);
+  $("photo-thumb").innerHTML = `<div class="thumb"><img src="${photoData}" alt=""></div>`;
+}
+async function verifyPhoto(){
+  if(!photoData) return showNeutral("photo-result", t("need_photo"));
+  const name = $("photo-name").value;
+  if(!name) return showNeutral("photo-result", t("need_name"));
+  showNeutral("photo-result", `<span class="spin"></span> ${t("working")}`);
+  try{
+    const d = await api("/api/verify", {name, image: photoData});
+    showResult("photo-result", d.matched, d.matched ? `${t("verified")} — ${escapeHtml(name)}` : `${t("not_verified")} — ${escapeHtml(name)}`, resultMeta(d));
+  }catch(e){ showResult("photo-result", false, escapeHtml(e.message), ""); }
+}
+async function identifyPhoto(){
+  if(!photoData) return showNeutral("photo-result", t("need_photo"));
+  showNeutral("photo-result", `<span class="spin"></span> ${t("working")}`);
+  try{
+    const d = await api("/api/identify", {image: photoData});
+    if(d.matched) showResult("photo-result", true, `${t("identify_ok")} ${escapeHtml(d.identity)}`, resultMeta(d));
+    else showResult("photo-result", false, t("identify_none"), resultMeta(d));
+  }catch(e){ showResult("photo-result", false, escapeHtml(e.message), ""); }
+}
+
+/* ---------- enroll ---------- */
+let enrollImages = [];
+async function onEnrollFiles(ev){
+  const files = Array.from(ev.target.files).slice(0,3);
+  enrollImages = await Promise.all(files.map(fileToDataURL));
+  $("enroll-thumbs").innerHTML = enrollImages.map((src,i) =>
+    `<div class="thumb"><img src="${src}" alt=""><button onclick="dropEnroll(${i})">×</button></div>`).join("");
+}
+function dropEnroll(i){ enrollImages.splice(i,1); onEnrollRender(); }
+function onEnrollRender(){
+  $("enroll-thumbs").innerHTML = enrollImages.map((src,i) =>
+    `<div class="thumb"><img src="${src}" alt=""><button onclick="dropEnroll(${i})">×</button></div>`).join("");
+}
+async function enroll(){
+  const name = $("enroll-name").value.trim();
+  if(!name) return showNeutral("enroll-result", t("need_enroll_name"));
+  if(!enrollImages.length) return showNeutral("enroll-result", t("need_enroll_photo"));
+  showNeutral("enroll-result", `<span class="spin"></span> ${t("working")}`);
+  try{
+    const d = await api("/api/enroll", {name, images: enrollImages, overwrite: true});
+    showResult("enroll-result", true, `${t("enrolled_ok")}: ${escapeHtml(name)}`,
+      `${d.samples} sample(s) · self-consistency ${Number(d.self_similarity).toFixed(2)} · quality ${Number(d.quality).toFixed(2)}`);
+    enrollImages = []; onEnrollRender(); $("enroll-name").value = ""; loadPeople();
+  }catch(e){ showResult("enroll-result", false, escapeHtml(e.message), ""); }
+}
+
+/* ---------- live scan ---------- */
+let stream = null, liveTimer = null, sessionId = null, busy = false;
+async function startLive(){
+  const name = $("live-name").value;
+  if(!name) return showNeutral("live-result", t("need_name"));
+  $("live-result").className = "result";
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"user", width:{ideal:640}}, audio:false});
+    $("live-video").srcObject = stream;
+    await $("live-video").play();
+    $("cam-hint").textContent = "";
+  }catch(e){
+    $("cam-hint").textContent = t("camera_denied");
+    showNeutral("live-result", t("camera_denied"));
+    return;
+  }
+  try{
+    const begin = await api("/api/live/begin", {name, mode:"verify", actions:2});
+    sessionId = begin.session_id;
+    $("live-prompt").textContent = begin.prompt;
+    $("live-bar").style.width = "0%";
+    $("live-start").disabled = true;
+    $("live-stop").classList.remove("hidden");
+    liveTimer = setInterval(sendFrame, 420);
+  }catch(e){ showResult("live-result", false, escapeHtml(e.message), ""); }
+}
+function stopLive(silent){
+  if(liveTimer) clearInterval(liveTimer);
+  liveTimer = null; sessionId = null; busy = false;
+  if(stream){ stream.getTracks().forEach(tr=>tr.stop()); stream = null; }
+  $("live-start").disabled = false;
+  $("live-stop").classList.add("hidden");
+  if(!silent) $("live-prompt").textContent = "";
+}
+async function sendFrame(){
+  if(!sessionId || busy || !stream) return;
+  busy = true;
+  try{
+    const video = $("live-video");
+    const canvas = document.createElement("canvas");
+    const w = 480, h = Math.round(video.videoHeight / (video.videoWidth||1) * w) || 360;
+    canvas.width = w; canvas.height = h;
+    canvas.getContext("2d").drawImage(video, 0, 0, w, h);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+    const state = await api("/api/live/frame", {session_id: sessionId, image: dataUrl});
+    $("live-prompt").textContent = state.prompt || "";
+    $("live-bar").style.width = ((state.progress||0)*100).toFixed(0) + "%";
+    if(state.status === "done"){
+      const d = state.result || {};
+      const v = d.verify || {};
+      if(v.matched) showResult("live-result", true, `${t("verified")} — ${escapeHtml(d.verify.identity)}`, resultMeta(v));
+      else showResult("live-result", false, d.message || t("not_verified"), resultMeta(v));
+      stopLive(true);
+    } else if(state.status === "error"){
+      showResult("live-result", false, escapeHtml(state.prompt||"error"), "");
+      stopLive(true);
+    }
+  }catch(e){
+    /* transient frame errors are fine; stop only on hard failures */
+  } finally { busy = false; }
+}
+
+/* ---------- boot ---------- */
+setLang(lang);
+loadPeople();
+setInterval(loadPeople, 15000);
+</script>
+</body>
+</html>

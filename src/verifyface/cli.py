@@ -17,7 +17,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import List, Optional, Sequence
+from typing import Optional, Sequence
 
 from . import _meta
 from .config import THRESHOLD_PRESETS, default_vault_path
@@ -28,6 +28,24 @@ RED = "\033[91m"
 YELLOW = "\033[93m"
 DIM = "\033[2m"
 RESET = "\033[0m"
+
+
+def _force_utf8_streams() -> None:
+    """Make unicode output safe on Windows consoles.
+
+    A Windows console redirected to a pipe defaults to the ANSI code page
+    (cp1252, cp437 …), where ``✔`` and Bengali names raise UnicodeEncodeError.
+    Reconfiguring to UTF-8 with ``errors="replace"`` keeps the command usable
+    everywhere instead of crashing halfway through a message.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:  # very old interpreters / exotic streams
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):  # pragma: no cover - closed or detached stream
+            pass
 
 
 def _supports_colour() -> bool:
@@ -212,7 +230,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     try:
         engine_info = verifier.engine.info()
         report["models"] = engine_info["models"]
-        for kind, info in engine_info["models"].items():
+        for info in engine_info["models"].values():
             if not info["valid"]:
                 problems += 1
     except Exception as exc:
@@ -410,6 +428,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    _force_utf8_streams()
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

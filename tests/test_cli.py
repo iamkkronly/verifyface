@@ -24,7 +24,17 @@ def run_cli(*args: str, vault: Path | None = None) -> subprocess.CompletedProces
     command = [sys.executable, "-m", "verifyface", *args]
     if vault is not None:
         command += ["--vault", str(vault)]
-    return subprocess.run(command, capture_output=True, text=True, env=env, timeout=300)
+    # decode explicitly as UTF-8: the CLI always writes UTF-8, while a Windows
+    # parent process would otherwise default to its ANSI code page
+    return subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+        timeout=300,
+    )
 
 
 @pytest.fixture()

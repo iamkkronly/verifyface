@@ -1,0 +1,24 @@
+verifyface — simple, private, offline face verification for Python.
+
+Developer: Kaustav Kanti Ray
+GitHub:    https://github.com/iamkkronly/verifyface
+PyPI:      https://pypi.org/project/verifyface/
+License:   MIT (see LICENSE)
+
+Copyright (c) 2026 Kaustav Kanti Ray
+
+This notice is repeated in the header of every source file, document and
+example in this repository.
+
+Bundled face models
+-------------------
+face_detection_yunet_2023mar_int8bq.onnx
+    YuNet face detector — Shiqi Yu et al., via OpenCV Zoo (Apache-2.0 / MIT).
+face_recognition_sface_2021dec_int8bq.onnx
+    SFace face recogniser — Yaoyao Zhong et al., via OpenCV Zoo (Apache-2.0).
+Both files were block-quantised to int8 with OpenCV Zoo's block_quantize.py.
+
+Test photographs
+----------------
+Wikimedia Commons contributors, public domain and CC licensed.
+See tests/fixtures/CREDITS.md for the full attribution table.

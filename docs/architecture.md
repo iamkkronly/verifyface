@@ -112,7 +112,7 @@ Decrypted payload:
   "samples": [{"vector": [...128 floats...], "quality": 0.93, "added_at": "…"}],
   "centroid": [...128 floats...],
   "self_similarity": 0.71,
-  "engine": {"library": "verifyface", "version": "1.0.0",
+  "engine": {"library": "verifyface", "version": "1.0.1",
              "developer": "Kaustav Kanti Ray", "model": "sface-2021dec-int8bq"},
   "notes": ""
 }

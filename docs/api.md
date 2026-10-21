@@ -1,6 +1,6 @@
 # API reference
 
-Developer: **Kaustav Kanti Ray** · version 1.0.0
+Developer: **Kaustav Kanti Ray** · version 1.0.1
 
 ```python
 import verifyface as vf

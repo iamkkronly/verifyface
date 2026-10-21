@@ -91,7 +91,7 @@ Removes the template and its backup. Asks for confirmation unless `--yes`.
 
 ```bash
 $ verifyface doctor
-verifyface v1.0.0 — Developer: Kaustav Kanti Ray
+verifyface v1.0.1 — Developer: Kaustav Kanti Ray
 python 3.13.1 • Linux-6.8-x86_64
 
   detector    ✔ model ready  face_detection_yunet_2023mar_int8bq.onnx 0.12 MB

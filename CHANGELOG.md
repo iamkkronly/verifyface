@@ -8,6 +8,28 @@ Developer: **Kaustav Kanti Ray**
 
 ---
 
+## [1.0.1] — 2026-10-21
+
+### Fixed
+
+- **Windows console crash** — the CLI now reconfigures stdout/stderr to UTF-8
+  with `errors="replace"`, so `✔`/`✘` and unicode names (for example Bengali)
+  no longer raise `UnicodeEncodeError` in a `cp1252`/`cp437` console or a
+  redirected pipe.
+- **Tkinter example** — `examples/08_desktop_gui.py` referenced `exc` outside
+  its `except` block and could raise `NameError` while reporting an error.
+- **`identify()`** — removed a dead adaptive-threshold calculation; ranking is
+  by raw similarity and the adaptive relaxation only affects the final verdict,
+  exactly as documented.
+
+### Changed
+
+- Lint gate pinned to `E,F,W,I,B,C4,RUF` in `pyproject.toml`; the codebase now
+  passes it with zero findings.
+- CLI tests decode child output explicitly as UTF-8.
+
+---
+
 ## [1.0.0] — 2026-10-21
 
 First public release.
@@ -53,4 +75,5 @@ First public release.
 - Identical twins remain the hardest case for any 128-d embedding.
 - No built-in multi-tenant authentication for the demo web server.
 
+[1.0.1]: https://github.com/iamkkronly/verifyface/releases/tag/v1.0.1
 [1.0.0]: https://github.com/iamkkronly/verifyface/releases/tag/v1.0.0

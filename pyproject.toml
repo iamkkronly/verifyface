@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "verifyface"
-version = "1.0.0"
+version = "1.0.1"
 description = "Face verification that anyone can use: enroll once, verify anywhere. Offline, private, and robust to changes in clothing, lighting, and background."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -93,6 +93,24 @@ filterwarnings = ["ignore::DeprecationWarning"]
 [tool.ruff]
 line-length = 100
 target-version = "py39"
+src = ["src", "tests", "examples"]
+
+[tool.ruff.lint]
+# A deliberate, useful gate: real errors, real bugs, clean imports.
+select = ["E", "F", "W", "I", "B", "C4", "RUF"]
+ignore = [
+    "E501",    # long lines are handled by the 100-column formatter convention
+    "RUF001",  # ✔ / ✘ / বাংলা are intentional in user-facing strings
+    "RUF002",
+    "RUF003",
+    "RUF022",  # __all__ is grouped by topic, not alphabetically
+    "RUF012",  # mutable class attributes are intentional in a few dataclasses
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011", "B017"]
+# FastAPI's File()/Form() defaults are the documented dependency-injection API
+"src/verifyface/integrations/fastapi_ext.py" = ["B008"]
 
 [tool.mypy]
 python_version = "3.9"

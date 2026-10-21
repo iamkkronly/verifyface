@@ -14,12 +14,10 @@ import os
 import numpy as np
 import pytest
 
-import verifyface as vf
+from tests.conftest import fixture_path
 from verifyface.errors import TemplateCorruptedError
 from verifyface.security import fingerprint, load_or_create_key, seal, unseal
 from verifyface.store import slugify
-
-from tests.conftest import fixture_path
 
 
 def _enroll(fresh_verifier, name: str = "tester"):

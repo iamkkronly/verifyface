@@ -21,7 +21,7 @@ def server(tmp_path_factory):
     from verifyface.web import create_server
 
     vault = tmp_path_factory.mktemp("web-vault")
-    httpd, state = create_server("127.0.0.1", 0, vault=str(vault))
+    httpd, _state = create_server("127.0.0.1", 0, vault=str(vault))
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
     port = httpd.server_address[1]
@@ -97,7 +97,7 @@ def test_live_session_over_http(server):
     assert state["preview"].startswith("data:image/jpeg;base64,")
 
     # the session is consumed
-    status, again = post(server, "/api/live/frame", {"session_id": session_id, "image": data_uri("person_a_2.jpg")})
+    status, _again = post(server, "/api/live/frame", {"session_id": session_id, "image": data_uri("person_a_2.jpg")})
     assert status == 404
 
 

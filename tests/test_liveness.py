@@ -8,15 +8,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verifyface.imageio import load_image
+from tests.conftest import fixture_path
 from verifyface.liveness import (
     LivenessTracker,
     passive_check,
     random_actions,
 )
 from verifyface.preprocess import DetectedFace
-
-from tests.conftest import fixture_path
 
 
 def _face(yaw_offset: float = 0.0, width: float = 120.0, pitch: float = 0.5) -> DetectedFace:

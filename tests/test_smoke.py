@@ -11,9 +11,11 @@ import pytest
 
 
 def test_metadata_and_credit():
+    import re
+
     import verifyface as vf
 
-    assert vf.__version__ == "1.0.0"
+    assert re.fullmatch(r"\d+\.\d+\.\d+", vf.__version__)
     assert vf.__author__ == "Kaustav Kanti Ray"
     assert vf.__developer__ == "Kaustav Kanti Ray"
     assert "Kaustav Kanti Ray" in vf.BANNER

@@ -8,13 +8,12 @@ from __future__ import annotations
 import pytest
 
 import verifyface as vf
+from tests.conftest import fixture_path
 from verifyface.errors import (
     IdentityExistsError,
     IdentityNotFoundError,
     NoFaceFoundError,
 )
-
-from tests.conftest import fixture_path
 
 
 # --------------------------------------------------------------------------- #

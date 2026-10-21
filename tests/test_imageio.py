@@ -7,17 +7,14 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import io
 import os
 
 import numpy as np
 import pytest
 
-import verifyface as vf
-from verifyface.imageio import load_image
-from verifyface.errors import ImageError, UnsupportedInputError
-
 from tests.conftest import fixture_path
+from verifyface.errors import ImageError, UnsupportedInputError
+from verifyface.imageio import load_image
 
 
 def _hash(path) -> str:

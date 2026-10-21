@@ -20,12 +20,12 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
+from typing import Iterable, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
 from . import _meta
-from .config import Settings, default_vault_path, resolve_threshold
+from .config import Settings, resolve_threshold
 from .engine import CompareResult, Embedding, FaceEngine
 from .errors import (
     IdentityExistsError,
@@ -333,9 +333,7 @@ class Verifier:
         profile = self.vault.load(identity)  # raises if unknown / corrupted
         probe = self.engine.embed(image)
 
-        base_cutoff, name = resolve_profile(
-            threshold, self.threshold if threshold is None else self.threshold
-        )
+        base_cutoff, name = resolve_profile(threshold, self.threshold)
         cutoff = base_cutoff
         if adaptive and profile.self_similarity:
             cutoff = adaptive_threshold([profile.self_similarity], base_cutoff)
@@ -391,9 +389,8 @@ class Verifier:
                 profile = self.vault.load(name)
             except (TemplateCorruptedError, IdentityNotFoundError):
                 continue
-            local_cutoff = (
-                adaptive_threshold([profile.self_similarity], cutoff) if adaptive else cutoff
-            )
+            # ranking is by raw similarity; the adaptive relax only matters for the
+            # final yes/no decision below, never for the ordering of candidates
             ranking.append((profile.identity, self._match_score(probe, profile)))
         ranking.sort(key=lambda item: item[1], reverse=True)
 

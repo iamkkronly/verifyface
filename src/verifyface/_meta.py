@@ -7,7 +7,7 @@ License:   MIT
 
 from __future__ import annotations
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 #: The person who designed, built and maintains this library.
 __author__ = "Kaustav Kanti Ray"

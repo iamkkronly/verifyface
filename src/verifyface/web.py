@@ -310,7 +310,8 @@ def make_handler(state: AppState):
             if not image:
                 self._error(400, "A photo is required.")
                 return
-            result = state.verifier.identify(image)
+            pin = data.get("pin")
+            result = state.verifier.identify(image, pin=str(pin) if pin else None)
             payload = result.as_dict()
             payload.update(ok=True, message=result.explain())
             self._json(200, payload)

@@ -143,7 +143,25 @@ v.verify("twin_a", probe)                        # False (ambiguous + PIN missin
 v.verify("twin_a", probe, pin="1111")            # True
 ```
 
-For twins, use `profile="high_security"` and always set a PIN per person.
+The PIN protects 1:N search too: `identify()` will not name a PIN-protected
+person unless the PIN is supplied (`identify(photo, pin="1111")`).
+
+For twins, set a PIN per person and verify through a live scan
+(`profile="high_security"`, `verifyface serve` or `LiveSession`) so presence is
+proven as well.
+
+### What a still photo can and cannot prove (1.1.1)
+
+`liveness="auto"` runs the **passive** heuristics — sharpness, moiré, glare — on
+whatever image it is given. A clean, well-lit upload passes those; that is a
+filter, not a proof.
+
+`liveness="required"` (and `profile="high_security"`) asks a different question:
+*was a living person in front of the camera?* Only a multi-frame capture in
+which the person actually performed a challenge can answer yes
+(`LivenessReport.live_evidence`). An uploaded file, a pasted frame or a photo of
+a photo is therefore refused with `liveness_status="unproven"` — in 1.1.0 it was
+wrongly reported as `"passed"`.
 
 ### Replay of an enrolled photo (1.1.0)
 
@@ -156,8 +174,10 @@ self-test is legitimate — while `high_security` refuses it outright
 
 ### What this stops
 
-* holding up a printed photo of the person,
-* showing a still photo or a paused video on a phone,
+* holding up a printed photo: refused by `liveness="required"` (no live evidence),
+  and usually flagged by the passive filter under `"auto"`,
+* showing a still photo or a paused video on a phone (same two mechanisms),
+* re-submitting an enrolled file (SHA-256 replay flag),
 * a photo held at a distance (fails the size/quality gates).
 
 ### What this does **not** stop
@@ -181,9 +201,10 @@ valuable.
 | Corrupting a template to lock somebody out | ✅ | signature + automatic backup restore |
 | Stealing the vault folder | ⚠️ partial | AES-256-GCM, but the key lives beside it unless `VERIFYFACE_KEY` is used |
 | Replaying a stored photo into the camera | ✅ | challenge–response + passive checks |
-| Printed photo / phone screen | ✅ | as above |
+| Printed photo / phone screen | ✅ | refused unless a live scan proves presence |
 | Identical twins (face only) | ⚠️ | upgraded in 1.1.0: ambiguity guard refuses, PIN separates |
 | Re-uploading an enrolled file | ✅ | SHA-256 replay flag (`high_security`: blocked) |
+| Using 1:N search to dodge a PIN | ✅ | `identify()` refuses a PIN-protected match without the PIN |
 | 3D mask, deepfake, coercion | ❌ | out of scope |
 | Network interception | ✅ | nothing is transmitted |
 | Path traversal via names | ✅ | slugified names with hash suffix |
@@ -197,7 +218,8 @@ valuable.
 2. Set `VERIFYFACE_KEY` from your secret manager, not a file on disk.
 3. Put the vault on a full-disk-encrypted volume.
 4. Use `threshold="strict"` — or simply `vf.Verifier(profile="high_security")`.
-5. Require `liveness` for anything remote (`profile="high_security"` does it).
+5. Require `liveness="required"` for anything remote — that demands a live scan
+   (`profile="high_security"` does it), so uploads are rejected by design.
 6. Run `verifyface lookalikes` and set a PIN for every reported pair.
 7. Log decisions (`result.as_dict()`) — but never log the images.
 8. Add a second factor for high-value actions.

@@ -1,6 +1,6 @@
 # API reference
 
-Developer: Kaustav Kanti Ray · version 1.1.0
+Developer: Kaustav Kanti Ray · version 1.1.1
 
 ```python
 import verifyface as vf
@@ -49,7 +49,9 @@ Optional parameters:
 |---|---|
 | `threshold="strict"` | override the policy for this call |
 | `adaptive=False` | disable the small threshold relaxation |
-| `liveness="auto" \| "required" \| "off"` | passive anti-spoofing on the probe |
+| `liveness="auto"` | passive screen/print filter on the probe — a good photo passes |
+| `liveness="required"` | proof of presence: only a multi-frame live scan passes; an upload is refused (`liveness_status="unproven"`) |
+| `liveness="off"` | no check at all |
 | `pin="1234"` | second factor, when one is set for the identity |
 | `ambiguity_guard=False` | allow a pass even if a lookalike is enrolled |
 | `check_replay=False` | skip the exact-replay check |
@@ -103,13 +105,13 @@ v = vf.Verifier(
 |---|---|---|---|---|
 | `convenience` | lenient | off | off | warn |
 | `standard` | balanced | off | on | warn |
-| `high_security` | strict | required | on | blocked |
+| `high_security` | strict | required (live scan only) | on | blocked |
 
 | Method | Returns | Notes |
 |---|---|---|
 | `enroll(identity, images, …)` | `EnrollmentResult` | |
 | `verify(identity, image, …)` | `VerifyResult` | |
-| `identify(image, candidates=None)` | `IdentifyResult` | restrict the gallery |
+| `identify(image, candidates=None, pin=None)` | `IdentifyResult` | restrict the gallery; a PIN-protected person needs the PIN |
 | `compare(a, b)` | `CompareResult` | |
 | `enrolled(name)` / `in v` | `bool` | |
 | `identities()` | `list[str]` | |
@@ -168,13 +170,13 @@ r.explain()      # one sentence for a human
 
 `VerifyResult` adds `identity`, `score`, `threshold`, `base_threshold`,
 `confidence`, `threshold_name`, `quality`, `liveness`, `repaired_template`, plus
-the 1.1.0 guard fields:
+the 1.1.x guard fields:
 
 | Field | Meaning |
 |---|---|
 | `ambiguous` | another enrolled person scores almost as high (twins) |
 | `second_best` | `(name, score)` of that runner-up |
-| `liveness_status` | `not_checked` / `passed` / `failed` |
+| `liveness_status` | `not_checked` / `passed` / `failed` / `unproven` (a still cannot prove presence) |
 | `replayed_sample` | the probe is byte-identical to an enrolled photo |
 | `requires_second_factor` / `second_factor_ok` | PIN state |
 | `reasons` | every guard that refused, in plain words |

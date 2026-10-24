@@ -55,6 +55,9 @@ class LivenessReport:
     actions_completed: Tuple[str, ...] = ()
     passive_score: float = 1.0
     frames: int = 0
+    #: True only when the report comes from a multi-frame capture in which the
+    #: person actually performed a challenge.  A single photo can never set it.
+    live_evidence: bool = False
     reasons: Tuple[str, ...] = field(default_factory=tuple)
 
     def __bool__(self) -> bool:
@@ -67,6 +70,7 @@ class LivenessReport:
             "completed": list(self.actions_completed),
             "passive_score": round(self.passive_score, 3),
             "frames": self.frames,
+            "live_evidence": self.live_evidence,
             "reasons": list(self.reasons),
         }
 
@@ -263,17 +267,28 @@ class LivenessTracker:
             newly.append(action)
         return newly
 
-    def report(self, *, passive_score: float = 1.0, reasons: Sequence[str] = ()) -> LivenessReport:
+    def report(
+        self,
+        *,
+        passive_score: float = 1.0,
+        reasons: Sequence[str] = (),
+        live_evidence: Optional[bool] = None,
+    ) -> LivenessReport:
         passed = not self.pending
         extra = list(reasons)
         if not passed:
             extra.append("challenges not completed: " + ", ".join(self.pending))
+        if live_evidence is None:
+            # multi-frame capture with every challenge completed is the only
+            # thing this library accepts as proof that a person was present
+            live_evidence = passed and self.frames > 1
         return LivenessReport(
             passed=passed,
             actions_required=self.actions,
             actions_completed=tuple(self.completed),
             passive_score=float(passive_score),
             frames=self.frames,
+            live_evidence=bool(live_evidence),
             reasons=tuple(extra),
         )
 

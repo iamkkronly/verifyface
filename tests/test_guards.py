@@ -152,13 +152,55 @@ def test_liveness_auto_rejects_a_flat_fake(fresh_verifier):
 
 
 def test_require_liveness_setting(fresh_verifier):
+    """require_liveness=True means "prove presence", which an upload cannot do."""
     from verifyface.config import Settings
 
     settings = Settings(vault=fresh_verifier.vault.path)
     verifier = vf.Verifier(settings=settings, require_liveness=True)
     verifier.enroll("a", [fixture_path(A1)], overwrite=True)
     result = verifier.verify("a", fixture_path(A2))
+    assert result.liveness_status == "unproven"
+    assert result.matched is False
+    assert any("live" in reason for reason in result.reasons)
+
+
+def test_required_liveness_refuses_an_uploaded_photo(fresh_verifier):
+    """The reported defect: a still (even a re-photographed one) must not pass.
+
+    A file on disk can never prove that a person is standing in front of the
+    camera, so ``liveness="required"`` refuses it instead of pretending the
+    passive filter settled the question.
+    """
+    v = fresh_verifier
+    v.enroll("a", [fixture_path(A1)])
+    result = v.verify("a", fixture_path(A2), liveness="required")
+    assert result.matched is False
+    assert result.liveness_status == "unproven"
+    assert result.explain()
+
+
+def test_live_session_evidence_is_accepted(fresh_verifier):
+    """A genuine multi-frame scan still passes, because it carries evidence."""
+    from verifyface.liveness import LivenessReport
+
+    v = fresh_verifier
+    v.enroll("a", [fixture_path(A1)])
+    live = LivenessReport(
+        passed=True, passive_score=0.9, frames=42, live_evidence=True,
+        actions_completed=("turn_left", "nod"),
+    )
+    result = v.verify("a", fixture_path(A2), liveness=live)
     assert result.liveness_status == "passed"
+    assert result.matched is True
+
+
+def test_liveness_auto_is_only_a_filter(fresh_verifier):
+    """"auto" stays a passive screen-replay filter — an honest photo passes."""
+    v = fresh_verifier
+    v.enroll("a", [fixture_path(A1)])
+    result = v.verify("a", fixture_path(A2), liveness="auto")
+    assert result.liveness_status == "passed"
+    assert result.matched is True
 
 
 def test_liveness_required_raises_on_failure(fresh_verifier, monkeypatch):

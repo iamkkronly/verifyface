@@ -43,22 +43,28 @@ they were accepted. Since 1.1.0:
 * `verifier.set_pin(name, "1234")` adds a second factor that *does* separate
   them — the face alone can no longer let either twin in.
 
-So: **face only → still not enough for twins. Face + PIN → yes.** Use
-`profile="high_security"` for anything that matters.
+So: **face only → still not enough for twins. Face + PIN → yes.** The PIN also
+gates `identify()`: a 1:N search will not name a PIN-protected person without it.
 
 ### A photo of a photo passes. Is that a bug?
 
-For pure image verification, yes by design: two identical images score 1.0.
-Since 1.1.0 you can ask for the passive liveness check inside `verify()`:
+Comparing two identical *images* out of context always scores 1.0 — that is why
+1.1.1 separates the two questions:
 
 ```python
-vf.verify("kaustav", "photo.jpg", liveness="auto")    # rejects screens/prints
-vf.verify("kaustav", "photo.jpg", liveness="required")  # raises on failure
+vf.verify("kaustav", "photo.jpg", liveness="auto")      # passive screen/print filter
+vf.verify("kaustav", "photo.jpg", liveness="required")  # proof of presence
 ```
 
+`"auto"` is a filter: a clean upload still passes. `"required"` — and
+`profile="high_security"` — needs evidence from a multi-frame live scan, so an
+uploaded file, a pasted frame or a photo of a photo is **refused**
+(`liveness_status="unproven"`). In 1.1.0 a still could wrongly be reported as
+`"passed"`; that is fixed.
+
 Uploading the exact enrolled file is also flagged (`replayed_sample=True`) and
-blocked under `profile="high_security"`. For real logins always use a live scan
-or a second factor — an uploaded JPEG can never prove presence.
+blocked under `profile="high_security"`. For a real login use a live scan and,
+for high-value actions, a second factor.
 
 ### What reduces accuracy?
 

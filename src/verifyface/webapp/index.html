@@ -262,6 +262,7 @@ const I18N = {
     similarity: "similarity", threshold: "threshold", confidence: "confidence",
     enrolled_ok: "Enrolled", deleted: "Deleted", no_face: "No face found — try another photo.",
     identify_none: "No enrolled person matched.", identify_ok: "Identified as",
+    pin_needed: "This person is protected by a PIN — enter it above and try again.",
     live_ready: "Point the camera at your face and press start.",
     need_name: "Please choose a person first.",
     need_photo: "Please choose a photo first.",
@@ -292,6 +293,7 @@ const I18N = {
     similarity: "মিল", threshold: "সীমা", confidence: "আত্মবিশ্বাস",
     enrolled_ok: "নিবন্ধিত হয়েছে", deleted: "মুছে ফেলা হয়েছে", no_face: "মুখ পাওয়া যায়নি — অন্য ছবি দিন।",
     identify_none: "নিবন্ধিত কারও সঙ্গে মেলেনি।", identify_ok: "শনাক্ত হয়েছে",
+    pin_needed: "এই ব্যক্তির জন্য PIN দেওয়া আছে — উপরে PIN লিখে আবার চেষ্টা করুন।",
     live_ready: "ক্যামেরার সামনে মুখ রাখুন, তারপর শুরু করুন।",
     need_name: "আগে একজনকে বেছে নিন।",
     need_photo: "আগে একটি ছবি দিন।",
@@ -426,8 +428,10 @@ async function identifyPhoto(){
   if(!photoData) return showNeutral("photo-result", t("need_photo"));
   showNeutral("photo-result", `<span class="spin"></span> ${t("working")}`);
   try{
-    const d = await api("/api/identify", {image: photoData});
+    const pin = ($("photo-pin").value || "").trim() || null;
+    const d = await api("/api/identify", {image: photoData, pin});
     if(d.matched) showResult("photo-result", true, `${t("identify_ok")} ${escapeHtml(d.identity)}`, resultMeta(d));
+    else if(d.requires_second_factor) showResult("photo-result", false, t("pin_needed"), resultMeta(d));
     else showResult("photo-result", false, t("identify_none"), resultMeta(d));
   }catch(e){ showResult("photo-result", false, escapeHtml(e.message), ""); }
 }

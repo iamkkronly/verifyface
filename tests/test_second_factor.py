@@ -156,6 +156,29 @@ def test_twin_scenario_is_solved_by_a_pin(fresh_verifier):
     assert v.verify("twin_1", fixture_path(A2), pin="2222").matched is False
 
 
+def test_identify_cannot_bypass_a_pin(fresh_verifier):
+    """1:N search used to hand out a PIN-protected identity with no PIN at all."""
+    v = fresh_verifier
+    v.enroll("a", [fixture_path(A1)])
+    v.enroll("b", [fixture_path("person_b_1.jpg")])
+    v.set_pin("a", "1234")
+
+    blocked = v.identify(fixture_path(A2))
+    assert blocked.matched is False
+    assert blocked.requires_second_factor is True
+    assert blocked.second_factor_ok is False
+    assert blocked.as_dict()["reasons"]
+    assert "PIN" in blocked.explain() and "<" not in blocked.explain()
+
+    assert v.identify(fixture_path(A2), pin="0000").matched is False
+    allowed = v.identify(fixture_path(A2), pin="1234")
+    assert allowed.matched is True
+    assert allowed.identity == "a"
+
+    # an identity without a PIN is unaffected
+    assert v.identify(fixture_path("person_b_2.jpg")).identity == "b"
+
+
 def test_corrupted_template_still_raises(fresh_verifier):
     v = fresh_verifier
     v.enroll("a", [fixture_path(A1)])

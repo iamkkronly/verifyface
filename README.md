@@ -7,7 +7,7 @@
 Face verification for Python that a shopkeeper, a school teacher or a
 first-time programmer can use — and that a security engineer can still trust.
 
-![PyPI](https://img.shields.io/pypi/v/verifyface?label=pypi) ![Python](https://img.shields.io/badge/python-3.9%20%E2%80%93%203.13-blue) ![License](https://img.shields.io/badge/license-MIT-green) ![Offline](https://img.shields.io/badge/runs-100%25%20offline-success) ![Tests](https://img.shields.io/badge/tests-151%20passing-brightgreen)
+![PyPI](https://img.shields.io/pypi/v/verifyface?label=pypi) ![Python](https://img.shields.io/badge/python-3.9%20%E2%80%93%203.13-blue) ![License](https://img.shields.io/badge/license-MIT-green) ![Offline](https://img.shields.io/badge/runs-100%25%20offline-success) ![Tests](https://img.shields.io/badge/tests-155%20passing-brightgreen)
 
 **Developer: Kaustav Kanti Ray** · [GitHub](https://github.com/iamkkronly/verifyface) · [PyPI](https://pypi.org/project/verifyface/)
 
@@ -57,14 +57,14 @@ deck — the photos are public-domain and CC-licensed portraits, credited in
 | Lookalikes (Portman/Knightley, Robbie/Weaving, Ferrell/Smith) | rejected, 0.11–0.36 | nothing needed |
 | **Identical twins** | **0.54–0.79 → false accept** | **lookalike detection + ambiguity guard + PIN** |
 | Sisters (Williams) | 0.31–0.43, occasionally accepted | ambiguity guard + PIN |
-| A photo of a photo | no defence in a pure photo API | passive liveness (`liveness="auto"`), mandatory in `high_security` |
+| A photo of a photo | no defence in a pure photo API | passive filter (`liveness="auto"`); **refused outright** (`liveness="required"`) |
 
 Twins are the one case **no** 128-dimensional face embedding can separate
 reliably — the architecture simply does not carry that much identity
-information. Rather than pretend otherwise, 1.1.0 adds three defences:
+information. Rather than pretend otherwise, 1.1.x adds three defences:
 
 ```python
-v = vf.Verifier(profile="high_security")   # strict + liveness + replay block
+v = vf.Verifier()      # standard profile: strict enough, uploads still allowed
 
 v.enroll("twin_a", "a.jpg")
 v.enroll("twin_b", "b.jpg")
@@ -80,7 +80,13 @@ v.verify("twin_a", "photo.jpg", pin="2222")      # False — the other twin's PI
 
 The ambiguity guard fires whenever another enrolled person scores within
 `0.06` of the claimed identity, so even a twin who was never given a PIN cannot
-walk in on the face alone.
+walk in on the face alone. The same PIN protects `identify()`: a 1:N search will
+not hand out a PIN-protected person's name unless the PIN comes with it.
+
+> **`high_security` means "live scan only".** That profile asks for proof that a
+> person is present, and a file on disk can never provide it, so uploaded photos
+> are refused there (`liveness_status="unproven"`). Use `standard` for uploads,
+> or pass `liveness="auto"` to accept a passive screen-replay check instead.
 
 Why it works:
 
@@ -122,11 +128,11 @@ where this library is strong and where it is not:
 |---|---|
 | 1000 LFW pairs | **97.7 % correct** — 0/500 impostors accepted, 4.6 % genuine rejected |
 | Lookalikes (4 celebrity pairs) | **10/10 correctly rejected** |
-| Identical twins (2 pairs) | **0/2** — both accepted (fixed in 1.1.0, see below) |
+| Identical twins (2 pairs) | **0/2** — both accepted (fixed in 1.1.x, see below) |
 | Same person, different photo/year | 8/9 |
 | Speed | ~100 ms per check on CPU |
 | FastAPI adapter | ❌ HTTP 500 on upload (**fixed in 1.1.0** — regression test added) |
-| Photo replay | ❌ a still photo passes (**mitigated in 1.1.0** with liveness + replay flags) |
+| Photo replay | ❌ a still photo passes (**fixed in 1.1.1** — `liveness="required"` needs a live scan) |
 
 ## Install
 
@@ -207,10 +213,10 @@ Or pick a whole security posture in one word:
 |---|---|---|---|---|
 | `convenience` | `lenient` | off | off | off |
 | `standard` *(default)* | `balanced` | off | **on** | warn |
-| `high_security` | `strict` | **required** | **on** | **on** |
+| `high_security` | `strict` | **required** (live scan) | **on** | **on** |
 
 ```python
-v = vf.Verifier(profile="high_security")
+v = vf.Verifier(profile="high_security")   # for a live camera, not for uploads
 ```
 
 ---
@@ -469,7 +475,7 @@ the hardest case. Use the `strict` threshold and a second factor.
 git clone https://github.com/iamkkronly/verifyface
 cd verifyface
 pip install -e ".[dev]"
-pytest -q                 # 151 tests, ~40 s
+pytest -q                 # 155 tests, ~40 s
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).

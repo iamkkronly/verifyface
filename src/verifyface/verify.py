@@ -169,6 +169,8 @@ class VerifyResult:
             text += " [template auto-repaired from backup]"
         if self.liveness_status == "failed":
             text += " [liveness check failed — the picture may be a photo of a photo]"
+        if self.liveness_status == "unproven":
+            text += " [no live-camera evidence — an uploaded still cannot prove presence]"
         if self.replayed_sample:
             text += " [this exact file is one of the enrolled photos]"
         if self.ambiguous and self.second_best:
@@ -194,6 +196,9 @@ class IdentifyResult:
     quality: Optional[object] = None
     ambiguous: bool = False
     margin: float = 1.0
+    requires_second_factor: bool = False
+    second_factor_ok: Optional[bool] = None
+    reasons: Tuple[str, ...] = field(default_factory=tuple)
 
     def __bool__(self) -> bool:
         return self.matched
@@ -209,9 +214,17 @@ class IdentifyResult:
             "quality": self.quality.as_dict() if hasattr(self.quality, "as_dict") else None,
             "ambiguous": self.ambiguous,
             "margin": round(self.margin, 4),
+            "requires_second_factor": self.requires_second_factor,
+            "second_factor_ok": self.second_factor_ok,
+            "reasons": list(self.reasons),
         }
 
     def explain(self) -> str:
+        if self.requires_second_factor and not self.second_factor_ok and self.ranking:
+            return (
+                f"{self.ranking[0][0]!r} matches (similarity {self.score:.3f}) but is "
+                "protected by a PIN — pass pin=… to identify them."
+            )
         if self.ambiguous and self.ranking:
             runner_up = self.ranking[1][0] if len(self.ranking) > 1 else "?"
             return (
@@ -495,23 +508,48 @@ class Verifier:
                 )
 
         # ---- 2. liveness --------------------------------------------------
+        # Two different promises hide under one word:
+        #   * "auto"     — a passive screen/print filter on the picture itself;
+        #   * "required" — proof that a living person was in front of a camera,
+        #                  which only a multi-frame scan can give.
         liveness_status = "not_checked"
         liveness_report: Optional[object] = liveness
-        required = self.require_liveness
+        required = self.require_liveness          # profile-level "prove presence"
         if isinstance(liveness, str):
             mode = liveness.strip().lower()
-            required = mode in {"auto", "on", "true", "1", "required"}
-            liveness_report = None if mode in {"off", "none", "false", "0", ""} else True
+            if mode in {"off", "none", "false", "0", ""}:
+                liveness_report, required = None, False
+            elif mode == "required":
+                liveness_report, required = True, True
+            else:                                  # auto / on / true / 1
+                liveness_report, required = True, False
         if liveness_report is True or (liveness_report is None and required):
             liveness_report = liveness_check(image)
-            required = True
         if liveness_report is not None and hasattr(liveness_report, "passed"):
-            liveness_status = "passed" if getattr(liveness_report, "passed", False) else "failed"
-            if liveness_status == "failed":
+            if getattr(liveness_report, "passed", False):
+                liveness_status = "passed"
+            else:
+                liveness_status = "failed"
                 matched = False
                 reasons.extend(getattr(liveness_report, "reasons", ()) or ())
                 if not reasons:
                     reasons.append("liveness check failed")
+        if (
+            required
+            and liveness_status != "failed"
+            and not getattr(liveness_report, "live_evidence", False)
+        ):
+            # A single picture — uploaded, pasted or re-photographed — cannot show
+            # that a living person is in front of the camera.  Claiming otherwise
+            # was the defect reported against 1.0.1, so "required" now means
+            # "proven by a live scan" and a still is refused outright.
+            liveness_status = "unproven"
+            matched = False
+            reasons.append(
+                "a still image cannot prove that a live person is present — scan with "
+                'a camera (verifyface serve / LiveSession) or use liveness="auto" '
+                "for a passive-only screen-replay check"
+            )
 
         # ---- 3. lookalike ambiguity --------------------------------------
         guard = self.ambiguity_guard if ambiguity_guard is None else bool(ambiguity_guard)
@@ -670,6 +708,7 @@ class Verifier:
         candidates: Optional[Iterable[str]] = None,
         threshold: Union[str, float, None] = None,
         adaptive: bool = True,
+        pin: Optional[str] = None,
     ) -> IdentifyResult:
         """Find out *who* is in the photo, by comparing against every profile."""
         cutoff, _ = resolve_profile(threshold, self.threshold)
@@ -701,6 +740,25 @@ class Verifier:
         matched = bool(best_name is not None and best_score >= cutoff)
         if ambiguous and self.ambiguity_guard:
             matched = False
+
+        # A PIN protects the whole identity, not just 1:1 checks: without this,
+        # identify() would be a one-line way around the second factor.
+        reasons: List[str] = []
+        requires_pin = False
+        second_ok: Optional[bool] = None
+        if best_name is not None:
+            try:
+                requires_pin = bool(self.vault.load(best_name).has_pin)
+            except (TemplateCorruptedError, IdentityNotFoundError):
+                requires_pin = False
+        if requires_pin:
+            second_ok = bool(pin is not None and self.check_pin(best_name or "", pin))
+            if not second_ok:
+                matched = False
+                reasons.append(
+                    f"{best_name!r} is protected by a PIN — pass pin=… to identify them"
+                )
+
         return IdentifyResult(
             identity=best_name if matched else None,
             matched=matched,
@@ -711,6 +769,9 @@ class Verifier:
             quality=probe.quality,
             ambiguous=ambiguous,
             margin=margin,
+            requires_second_factor=requires_pin,
+            second_factor_ok=second_ok,
+            reasons=tuple(reasons),
         )
 
     def compare(

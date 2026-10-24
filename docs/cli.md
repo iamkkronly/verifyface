@@ -52,7 +52,7 @@ $ verifyface verify kaustav stranger.jpg ; echo $?
 ## `identify`
 
 ```bash
-verifyface identify <image> [--json]
+verifyface identify <image> [--pin PIN | --ask-pin] [--json]
 ```
 
 Compares against every enrolled person and prints the best match plus the two
@@ -115,7 +115,7 @@ Removes the template and its backup. Asks for confirmation unless `--yes`.
 
 ```bash
 $ verifyface doctor
-verifyface v1.1.0 — Developer: Kaustav Kanti Ray
+verifyface v1.1.1 — Developer: Kaustav Kanti Ray
 python 3.13.1 • Linux-6.8-x86_64
 
   detector    ✔ model ready  face_detection_yunet_2023mar_int8bq.onnx 0.12 MB
@@ -191,4 +191,5 @@ JSON with the engine configuration, threshold, model paths and SHA-256 digests.
 |---|---|---|
 | `--vault PATH` | all except `serve`/`download-models` | use another vault |
 | `--threshold VALUE` | `enroll`, `verify`, `identify`, `compare` | `strict`, `balanced`, `lenient` or a number |
+| `--pin PIN` / `--ask-pin` | `verify`, `identify` | second factor for a PIN-protected identity |
 | `--json` | `enroll`, `verify`, `identify`, `compare`, `list`, `doctor` | machine-readable output |

@@ -189,7 +189,12 @@ def cmd_identify(args: argparse.Namespace) -> int:
     import verifyface as vf
 
     verifier = vf.Verifier(vault=args.vault, threshold=args.threshold)
-    result = verifier.identify(args.image)
+    pin = getattr(args, "pin", None)
+    if pin is None and getattr(args, "ask_pin", False):
+        import getpass
+
+        pin = getpass.getpass("PIN: ")
+    result = verifier.identify(args.image, pin=pin)
     if args.json:
         print(json.dumps(result.as_dict(), indent=2, ensure_ascii=False))
         return 0 if result.matched else 1
@@ -530,6 +535,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("identify", parents=[common], help="find who is in a photo")
     p.add_argument("image")
+    p.add_argument("--pin", help="second factor, when the matched person has one")
+    p.add_argument("--ask-pin", action="store_true", help="prompt for the PIN (hidden input)")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_identify)
 

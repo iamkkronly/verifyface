@@ -8,6 +8,44 @@ Developer: Kaustav Kanti Ray
 
 ---
 
+## [1.1.1] — 2026-10-24
+
+Follow-up to 1.1.0, found by re-running the reviewer's own scenarios against the
+published wheel. Two of them still got through. Both are fixed here, with tests.
+
+### Fixed
+
+- **A still image could satisfy `liveness="required"`.** The check ran the
+  passive screen/print heuristics and reported `liveness_status="passed"` for a
+  plain upload — which is exactly the "photo of a photo passes" complaint, one
+  layer deeper. `"required"` now means *proved by a live scan*: only a
+  multi-frame capture in which the person completed a challenge carries
+  `LivenessReport.live_evidence`, and a file on disk is refused with
+  `liveness_status="unproven"`. `"auto"` keeps its real meaning — a passive
+  filter that a clean photo passes — and says so in the docs.
+  `profile="high_security"` therefore means **live camera only**; uploads are
+  refused there by design.
+- **`identify()` bypassed the PIN.** 1:1 verification demanded the PIN, but a
+  1:N search returned a PIN-protected person's name without one. `identify()`
+  now takes `pin=`; without the right PIN the result is `matched=False`,
+  `requires_second_factor=True`, and the identity is not disclosed.
+  CLI: `verifyface identify photo.jpg --pin 1234` (or `--ask-pin`).
+
+### Changed
+
+- `LivenessReport` gained `live_evidence` (also in `as_dict()`), and
+  `LivenessTracker.report()` sets it only for a completed multi-frame capture.
+- `IdentifyResult` gained `requires_second_factor`, `second_factor_ok`, `reasons`.
+- Web API: `/api/identify` accepts `pin`.
+- Docs: README, `docs/security.md`, `docs/api.md`, `docs/faq.md` and the Bengali
+  guide now distinguish "passive filter" from "proof of presence", and warn that
+  `high_security` refuses uploads.
+- Tests: 151 → 155.
+
+Developer: Kaustav Kanti Ray
+
+---
+
 ## [1.1.0] — 2026-10-24
 
 Security release responding to an independent user test report. Everything below
@@ -144,6 +182,7 @@ First public release.
 - Identical twins remain the hardest case for any 128-d embedding.
 - No built-in multi-tenant authentication for the demo web server.
 
+[1.1.1]: https://github.com/iamkkronly/verifyface/releases/tag/v1.1.1
 [1.1.0]: https://github.com/iamkkronly/verifyface/releases/tag/v1.1.0
 [1.0.1]: https://github.com/iamkkronly/verifyface/releases/tag/v1.0.1
 [1.0.0]: https://github.com/iamkkronly/verifyface/releases/tag/v1.0.0

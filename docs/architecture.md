@@ -1,6 +1,6 @@
 # Architecture
 
-Developer: **Kaustav Kanti Ray**
+Developer: Kaustav Kanti Ray
 
 ---
 

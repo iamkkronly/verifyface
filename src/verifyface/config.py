@@ -114,6 +114,8 @@ class Settings:
     allow_download: bool = True
     auto_repair: bool = True
     model_dir: Optional[Path] = None
+    ambiguity_margin: float = 0.06   # twins / lookalikes: refuse inside this margin
+    store_source_hashes: bool = True  # detect exact replays of an enrolled photo
 
     def __post_init__(self) -> None:
         self.vault = Path(self.vault).expanduser()

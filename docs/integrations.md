@@ -1,6 +1,6 @@
 # Integrations
 
-Developer: **Kaustav Kanti Ray**
+Developer: Kaustav Kanti Ray
 
 verifyface runs anywhere Python runs. These recipes cover the platforms people
 ask about most.

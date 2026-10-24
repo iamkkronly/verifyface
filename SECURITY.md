@@ -1,6 +1,6 @@
 # Security policy
 
-Developer: **Kaustav Kanti Ray**
+Developer: Kaustav Kanti Ray
 
 ## Reporting a vulnerability
 

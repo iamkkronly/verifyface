@@ -135,6 +135,7 @@ class LiveSession:
         passive_threshold: float = 0.35,
         frame_budget: int = 120,
         notes: str = "",
+        pin: Optional[str] = None,
     ) -> None:
         if mode not in {"verify", "enroll", "capture"}:
             raise ValueError("mode must be 'verify', 'enroll' or 'capture'")
@@ -145,6 +146,7 @@ class LiveSession:
         self.mode = mode
         self.verifier = verifier
         self.notes = notes
+        self.pin = pin
         self.require_liveness = bool(require_liveness) and actions > 0
         self.passive_threshold = passive_threshold
         self.challenges = random_actions(actions, challenge_pool) if actions else ()
@@ -268,7 +270,9 @@ class LiveSession:
         preview = encode_jpeg(reference, 80) if reference is not None else None
         try:
             if self.mode == "verify":
-                verification = verifier.verify(self.identity, reference, liveness=liveness)
+                verification = verifier.verify(
+                    self.identity, reference, liveness=liveness, pin=self.pin
+                )
                 passed = bool(verification.matched)
                 message = verification.explain()
                 self.result = LiveResult(

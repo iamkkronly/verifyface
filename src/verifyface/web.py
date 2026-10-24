@@ -35,6 +35,7 @@ class AppState:
     def __init__(self, vault: Optional[str] = None) -> None:
         self.verifier = Verifier(vault=vault)
         self.sessions: Dict[str, Dict[str, Any]] = {}
+        self.live_pins: Dict[str, str] = {}
         self.lock = threading.Lock()
 
     # -- live sessions ----------------------------------------------------- #
@@ -42,7 +43,11 @@ class AppState:
         from .camera import LiveSession
 
         session = LiveSession(
-            identity=identity, verifier=self.verifier, mode=mode, actions=actions
+            identity=identity,
+            verifier=self.verifier,
+            mode=mode,
+            actions=actions,
+            pin=self.live_pins.get(identity or "", None),
         )
         session_id = uuid.uuid4().hex
         state = session.begin()
@@ -52,6 +57,7 @@ class AppState:
                 "created": time.time(),
                 "mode": mode,
                 "identity": identity,
+                "pin": self.live_pins.get(identity or "", None),
             }
             self._cleanup()
         state["session_id"] = session_id
@@ -63,6 +69,8 @@ class AppState:
         if entry is None:
             raise KeyError("Unknown or expired live session. Start again.")
         session = entry["session"]
+        if entry.get("pin") and session.verifier is not None:
+            session.pin = entry["pin"]
         state = session.feed(frame)
         state["session_id"] = session_id
         if state["status"] == "done" and session.result is not None:
@@ -155,6 +163,17 @@ def make_handler(state: AppState):
                 except Exception as exc:
                     self._error(500, str(exc))
                 return
+            if path == "/api/lookalikes":
+                try:
+                    pairs = state.verifier.lookalikes()
+                    self._json(200, {
+                        "ok": True,
+                        "pairs": [{"a": a, "b": b, "score": round(score, 4)}
+                                  for a, b, score in pairs],
+                    })
+                except Exception as exc:
+                    self._error(500, str(exc))
+                return
             if path == "/api/health":
                 self._json(200, {"ok": True, "version": _meta.__version__,
                                  "developer": _meta.__author__})
@@ -191,12 +210,32 @@ def make_handler(state: AppState):
                     self._handle_identify(data)
                 elif path == "/api/compare":
                     self._handle_compare(data)
+                elif path == "/api/lookalikes":
+                    pairs = state.verifier.lookalikes()
+                    self._json(200, {
+                        "ok": True,
+                        "pairs": [{"a": a, "b": b, "score": round(s, 4)} for a, b, s in pairs],
+                    })
+                elif path == "/api/pin":
+                    name = str(data.get("name", "")).strip()
+                    pin = str(data.get("pin", "")).strip()
+                    if not name:
+                        self._error(400, "A name is required.")
+                        return
+                    if pin:
+                        state.verifier.set_pin(name, pin)
+                    else:
+                        state.verifier.clear_pin(name)
+                    self._json(200, {"ok": True, "second_factor": bool(pin)})
                 elif path == "/api/delete":
                     name = str(data.get("name", "")).strip()
                     removed = state.verifier.remove(name)
                     self._json(200, {"ok": True, "deleted": removed})
                 elif path == "/api/live/begin":
                     identity = (data.get("name") or "").strip() or None
+                    state.live_pins.pop(identity, None) if identity is None else None
+                    if identity and data.get("pin"):
+                        state.live_pins[identity] = str(data["pin"])
                     mode = str(data.get("mode") or ("verify" if identity else "capture"))
                     if mode in {"verify", "enroll"} and not identity:
                         self._error(400, "Live verification needs a name.")
@@ -237,6 +276,12 @@ def make_handler(state: AppState):
             result = state.verifier.enroll(
                 name, images, overwrite=bool(data.get("overwrite", True))
             )
+            pin = (data.get("pin") or "").strip()
+            if pin:
+                try:
+                    state.verifier.set_pin(name, pin)
+                except VerifyFaceError:
+                    pass  # too short: reported by the client, face is still enrolled
             payload = result.as_dict()
             payload.update(ok=True, message=result.explain())
             self._json(200, payload)
@@ -247,7 +292,15 @@ def make_handler(state: AppState):
             if not name or not image:
                 self._error(400, "A name and a photo are required.")
                 return
-            result = state.verifier.verify(name, image)
+            pin = data.get("pin")
+            liveness = "auto" if data.get("liveness") else "off"
+            result = state.verifier.verify(
+                name,
+                image,
+                pin=str(pin) if pin else None,
+                liveness=liveness,
+                ambiguity_guard=bool(data.get("ambiguity_guard", True)),
+            )
             payload = result.as_dict()
             payload.update(ok=True, message=result.explain())
             self._json(200, payload)

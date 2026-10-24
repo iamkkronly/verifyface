@@ -1,6 +1,6 @@
 # Contributing
 
-Developer: **Kaustav Kanti Ray** · <https://github.com/iamkkronly/verifyface>
+Developer: Kaustav Kanti Ray · <https://github.com/iamkkronly/verifyface>
 
 Thank you for wanting to improve verifyface. This project optimises for two
 things at once: **a beginner must be able to use it in thirty seconds**, and

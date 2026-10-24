@@ -1,6 +1,6 @@
 # Frequently asked questions
 
-Developer: **Kaustav Kanti Ray**
+Developer: Kaustav Kanti Ray
 
 ---
 
@@ -30,6 +30,35 @@ bytes) and impossible to turn back into a photo.
 Yes — that is the point of an identity embedding. The test suite verifies the
 same person across 11 years, different suits, different buildings and different
 cameras, with similarities between 0.55 and 0.81.
+
+### Can it tell identical twins apart?
+
+No — and no 128-dimensional face embedding can. Independent testing of 1.0.1
+measured **0.54** and **0.79** for two twin pairs against a 0.40 threshold, i.e.
+they were accepted. Since 1.1.0:
+
+* `verifyface lookalikes` lists every enrolled pair that is too similar,
+* the ambiguity guard **refuses** a verification when a second enrolled person
+  scores within 0.06 of the claimed identity,
+* `verifier.set_pin(name, "1234")` adds a second factor that *does* separate
+  them — the face alone can no longer let either twin in.
+
+So: **face only → still not enough for twins. Face + PIN → yes.** Use
+`profile="high_security"` for anything that matters.
+
+### A photo of a photo passes. Is that a bug?
+
+For pure image verification, yes by design: two identical images score 1.0.
+Since 1.1.0 you can ask for the passive liveness check inside `verify()`:
+
+```python
+vf.verify("kaustav", "photo.jpg", liveness="auto")    # rejects screens/prints
+vf.verify("kaustav", "photo.jpg", liveness="required")  # raises on failure
+```
+
+Uploading the exact enrolled file is also flagged (`replayed_sample=True`) and
+blocked under `profile="high_security"`. For real logins always use a live scan
+or a second factor — an uploaded JPEG can never prove presence.
 
 ### What reduces accuracy?
 

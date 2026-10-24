@@ -1,6 +1,6 @@
 # Code of Conduct
 
-Developer: **Kaustav Kanti Ray**
+Developer: Kaustav Kanti Ray
 
 ## Our pledge
 

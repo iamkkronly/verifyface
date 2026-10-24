@@ -30,10 +30,10 @@ def init_app(
     """Register the verifyface blueprint on a Flask application."""
     try:
         from flask import Blueprint, jsonify, request
-    except ImportError as exc:  # pragma: no cover - optional dependency
+    except ImportError:  # pragma: no cover - optional dependency
         raise ImportError(
             "Flask is not installed. Run: pip install \"verifyface[flask]\""
-        ) from exc
+        ) from None
 
     from ..errors import VerifyFaceError
 

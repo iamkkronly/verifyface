@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Developer: **Kaustav Kanti Ray**
+Developer: Kaustav Kanti Ray
 
 Start with:
 

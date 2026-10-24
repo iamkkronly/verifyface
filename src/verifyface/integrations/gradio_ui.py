@@ -17,8 +17,8 @@ def build(verifier: Optional[Verifier] = None, *, title: str = "verifyface"):
     """Return a :class:`gradio.Blocks` app wired to verifyface."""
     try:
         import gradio as gr
-    except ImportError as exc:  # pragma: no cover - optional dependency
-        raise ImportError("Gradio is not installed. Run: pip install gradio") from exc
+    except ImportError:  # pragma: no cover - optional dependency
+        raise ImportError("Gradio is not installed. Run: pip install gradio") from None
 
     from ..errors import VerifyFaceError
 

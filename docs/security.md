@@ -1,6 +1,6 @@
 # Security, privacy and the threat model
 
-Developer: **Kaustav Kanti Ray**
+Developer: Kaustav Kanti Ray
 
 This document says exactly what verifyface protects against, how, and — just as
 importantly — what it does **not** protect against.
@@ -113,6 +113,47 @@ peak in the FFT magnitude (screen moiré), large low-saturation bright regions
 (glare), and colour richness. Scores below `passive_threshold` (default 0.35)
 reject the frame.
 
+### Twins, siblings and lookalikes (1.1.0)
+
+A 128-dimensional embedding cannot separate identical twins — independent
+testing of 1.0.1 found twin pairs scoring **0.54** and **0.79** against a 0.40
+threshold, i.e. automatic false accepts. The same test found ordinary lookalikes
+correctly rejected (0.11–0.36).
+
+Three mechanisms now cover the gap:
+
+1. **Lookalike detection.** `verifier.lookalikes()` (and `verifyface
+   lookalikes`) reports every enrolled pair whose centroids score above 0.5.
+   `verifyface doctor` prints it too.
+2. **Ambiguity guard (on by default).** During `verify()`, the probe is scored
+   against *every* enrolled identity. If a second person scores within
+   `ambiguity_margin` (default 0.06) of the claimed identity, the verification
+   is refused with `ambiguous=True` and an explicit reason. A twin therefore
+   cannot be accepted on the face alone, even if no PIN was configured.
+3. **Second factor.** `verifier.set_pin(name, "1234")` stores a scrypt hash
+   (never the PIN) in the signed template. Once set, `verify()` requires the
+   PIN; a correct PIN *resolves* the ambiguity, a wrong or missing one never
+   passes.
+
+```python
+v.enroll("twin_a", "a.jpg"); v.enroll("twin_b", "b.jpg")
+v.lookalikes()                                   # [('twin_a', 'twin_b', 0.79)]
+v.set_pin("twin_a", "1111"); v.set_pin("twin_b", "2222")
+v.verify("twin_a", probe)                        # False (ambiguous + PIN missing)
+v.verify("twin_a", probe, pin="1111")            # True
+```
+
+For twins, use `profile="high_security"` and always set a PIN per person.
+
+### Replay of an enrolled photo (1.1.0)
+
+`enroll()` stores the SHA-256 of each source image (disable with
+`Settings(store_source_hashes=False)`). `verify()` reports
+`replayed_sample=True` when the probe file is byte-identical to an enrolled
+photo. The `standard` profile only warns — submitting the enrollment photo for a
+self-test is legitimate — while `high_security` refuses it outright
+(`block_replay=True`).
+
 ### What this stops
 
 * holding up a printed photo of the person,
@@ -141,6 +182,8 @@ valuable.
 | Stealing the vault folder | ⚠️ partial | AES-256-GCM, but the key lives beside it unless `VERIFYFACE_KEY` is used |
 | Replaying a stored photo into the camera | ✅ | challenge–response + passive checks |
 | Printed photo / phone screen | ✅ | as above |
+| Identical twins (face only) | ⚠️ | upgraded in 1.1.0: ambiguity guard refuses, PIN separates |
+| Re-uploading an enrolled file | ✅ | SHA-256 replay flag (`high_security`: blocked) |
 | 3D mask, deepfake, coercion | ❌ | out of scope |
 | Network interception | ✅ | nothing is transmitted |
 | Path traversal via names | ✅ | slugified names with hash suffix |
@@ -153,12 +196,13 @@ valuable.
 1. `pip install "verifyface[secure]"` so templates are encrypted.
 2. Set `VERIFYFACE_KEY` from your secret manager, not a file on disk.
 3. Put the vault on a full-disk-encrypted volume.
-4. Use `threshold="strict"` for access control.
-5. Require `liveness` for anything remote.
-6. Log decisions (`result.as_dict()`) — but never log the images.
-7. Add a second factor for high-value actions.
-8. Run `verifyface doctor` in your CI or startup script.
-9. Back up the vault folder (templates + key) together.
+4. Use `threshold="strict"` — or simply `vf.Verifier(profile="high_security")`.
+5. Require `liveness` for anything remote (`profile="high_security"` does it).
+6. Run `verifyface lookalikes` and set a PIN for every reported pair.
+7. Log decisions (`result.as_dict()`) — but never log the images.
+8. Add a second factor for high-value actions.
+9. Run `verifyface doctor` in your CI or startup script.
+10. Back up the vault folder (templates + key) together.
 
 ---
 

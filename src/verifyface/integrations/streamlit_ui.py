@@ -19,8 +19,8 @@ def render(verifier: Optional[Verifier] = None, *, title: str = "Face verificati
     """Draw the verifyface UI inside a Streamlit app."""
     try:
         import streamlit as st
-    except ImportError as exc:  # pragma: no cover - optional dependency
-        raise ImportError("Streamlit is not installed. Run: pip install streamlit") from exc
+    except ImportError:  # pragma: no cover - optional dependency
+        raise ImportError("Streamlit is not installed. Run: pip install streamlit") from None
 
     from ..errors import VerifyFaceError
 

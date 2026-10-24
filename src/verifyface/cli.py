@@ -89,15 +89,100 @@ def cmd_verify(args: argparse.Namespace) -> int:
     import verifyface as vf
 
     verifier = vf.Verifier(vault=args.vault, threshold=args.threshold)
-    result = verifier.verify(args.identity, args.image)
+    pin = args.pin
+    if pin is None and getattr(args, "ask_pin", False):
+        import getpass
+
+        pin = getpass.getpass("PIN: ")
+    result = verifier.verify(
+        args.identity,
+        args.image,
+        pin=pin,
+        liveness=getattr(args, "liveness", "off"),
+        ambiguity_guard=None if args.ambiguity_guard else False,
+    )
     if args.json:
         print(json.dumps(result.as_dict(), indent=2, ensure_ascii=False))
     else:
         line = result.explain()
         print(_ok(line) if result.matched else _bad(line))
+        for reason in result.reasons:
+            print(_warn(reason))
         if result.quality is not None and not result.quality.passed:
             print(_warn(f"photo quality: {result.quality.describe()}"))
     return 0 if result.matched else 1
+
+
+def cmd_pin(args: argparse.Namespace) -> int:
+    """Attach a second factor (PIN / passphrase) to an enrolled identity."""
+    import getpass
+
+    import verifyface as vf
+
+    verifier = vf.Verifier(vault=args.vault)
+    if not verifier.enrolled(args.identity):
+        print(_bad(f"no enrolled identity named {args.identity!r}"))
+        return 1
+    first = args.pin or getpass.getpass("New PIN: ")
+    if args.pin is None:
+        second = getpass.getpass("Repeat PIN: ")
+        if first != second:
+            print(_bad("the two PINs do not match"))
+            return 1
+    try:
+        verifier.set_pin(args.identity, first)
+    except vf.VerifyFaceError as exc:
+        print(_bad(str(exc)))
+        return 1
+    print(_ok(f"PIN set for {args.identity!r} — verification now needs the PIN too"))
+    pair = [p for p in verifier.lookalikes() if args.identity in (p[0], p[1])]
+    if pair:
+        print(_warn("this identity looks very similar to: " + ", ".join(
+            f"{b if a == args.identity else a} ({score:.2f})" for a, b, score in pair
+        )))
+    return 0
+
+
+def cmd_clear_pin(args: argparse.Namespace) -> int:
+    import verifyface as vf
+
+    verifier = vf.Verifier(vault=args.vault)
+    if not verifier.enrolled(args.identity):
+        print(_bad(f"no enrolled identity named {args.identity!r}"))
+        return 1
+    verifier.clear_pin(args.identity)
+    print(_ok(f"PIN removed for {args.identity!r}"))
+    return 0
+
+
+def cmd_lookalikes(args: argparse.Namespace) -> int:
+    """Report enrolled pairs that are too similar to separate reliably."""
+    import verifyface as vf
+
+    verifier = vf.Verifier(vault=args.vault)
+    pairs = verifier.lookalikes(threshold=args.threshold)
+    if args.json:
+        print(json.dumps(
+            [{"a": a, "b": b, "score": round(s, 4)} for a, b, s in pairs], indent=2,
+            ensure_ascii=False,
+        ))
+        return 0
+    names = verifier.identities()
+    if not names:
+        print(_warn(f"nobody enrolled in {verifier.vault.path}"))
+        return 0
+    if not pairs:
+        print(_ok(f"{len(names)} identities, no lookalike pairs above {args.threshold:.2f}"))
+        return 0
+    print(_warn(f"{len(pairs)} lookalike pair(s) — twins/siblings score high here:"))
+    for a, b, score in pairs:
+        guarded = "guarded" if verifier.ambiguity_guard else "NOT guarded"
+        print(f"  • {a} ↔ {b}  {score:.3f}  ({guarded})")
+    print(_paint(
+        "  Advice: keep the ambiguity guard on and set a PIN for both people: "
+        "verifyface pin <name>", DIM,
+    ))
+    return 0
 
 
 def cmd_identify(args: argparse.Namespace) -> int:
@@ -155,8 +240,9 @@ def cmd_list(args: argparse.Namespace) -> int:
             extra = ""
             if profile.repaired:
                 extra = " " + _warn("restored from backup")
+            lock = " 🔒 PIN" if profile.has_pin else ""
             print(
-                f"  • {name}{extra}  "
+                f"  • {name}{extra}{lock}  "
                 + _paint(
                     f"{profile.sample_count} sample(s), self-consistency "
                     f"{profile.self_similarity:.2f}, updated {profile.updated_at}",
@@ -245,6 +331,19 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         report["templates"] = [{"status": "error", "detail": str(exc)}]
         problems += 1
 
+    try:
+        report["lookalikes"] = [
+            {"a": a, "b": b, "score": round(score, 4)} for a, b, score in verifier.lookalikes()
+        ]
+        report["second_factors"] = sum(
+            1 for name in verifier.identities()
+            if _safe_has_pin(verifier, name)
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        report["lookalikes"] = []
+        report["second_factors"] = 0
+        report["lookalike_error"] = str(exc)
+
     report["camera"] = _camera_status()
     report["problems"] = problems
 
@@ -268,12 +367,28 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         print(f"  {'templates':11s} {len(templates)} checked, {len(fixed)} repaired, {len(bad)} corrupted")
     else:
         print(f"  {'templates':11s} none yet")
+    pairs = report.get("lookalikes") or []
+    if pairs:
+        print(f"  {'lookalikes':11s} {len(pairs)} pair(s) need a second factor:")
+        for row in pairs[:5]:
+            print(_warn(f"      {row['a']} ↔ {row['b']}  {row['score']:.3f}"))
+    else:
+        print(f"  {'lookalikes':11s} none")
+    if report.get("second_factors"):
+        print(f"  {'2nd factor':11s} {report['second_factors']} identity(ies) protected by a PIN")
     print()
     if problems:
         print(_bad(f"{problems} problem(s) found — see details above"))
         return 1
     print(_ok("everything looks good"))
     return 0
+
+
+def _safe_has_pin(verifier, name: str) -> bool:
+    try:
+        return bool(verifier.profile(name).has_pin)
+    except Exception:
+        return False
 
 
 def _camera_status() -> str:
@@ -376,8 +491,42 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("verify", parents=[common], help="check a photo against a person")
     p.add_argument("identity")
     p.add_argument("image")
+    p.add_argument("--pin", help="second factor, when one is set for this identity")
+    p.add_argument("--ask-pin", action="store_true", help="prompt for the PIN (hidden input)")
+    p.add_argument(
+        "--liveness",
+        default="off",
+        choices=["off", "auto", "required"],
+        help="passive anti-spoofing on the probe (rejects photos of screens/prints)",
+    )
+    p.add_argument(
+        "--no-ambiguity-guard",
+        dest="ambiguity_guard",
+        action="store_false",
+        help="allow a pass even when a lookalike is enrolled (not recommended)",
+    )
     p.add_argument("--json", action="store_true")
-    p.set_defaults(func=cmd_verify)
+    p.set_defaults(func=cmd_verify, ambiguity_guard=True)
+
+    p = sub.add_parser("pin", parents=[common], help="set a PIN (second factor) for a person")
+    p.add_argument("identity")
+    p.add_argument("--pin", help="the PIN itself (otherwise you are prompted)")
+    p.set_defaults(func=cmd_pin)
+
+    p = sub.add_parser("clear-pin", parents=[common], help="remove the PIN of a person")
+    p.add_argument("identity")
+    p.set_defaults(func=cmd_clear_pin)
+
+    p = sub.add_parser(
+        "lookalikes", help="find twins/siblings that look too similar"
+    )
+    p.add_argument("--vault", help="vault folder")
+    p.add_argument(
+        "--threshold", type=float, default=0.5,
+        help="similarity above which two enrolled people are considered lookalikes",
+    )
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_lookalikes)
 
     p = sub.add_parser("identify", parents=[common], help="find who is in a photo")
     p.add_argument("image")

@@ -124,6 +124,10 @@
         <div>
           <label data-i18n="who">Person</label>
           <select id="live-name"></select>
+          <div style="margin-top:10px">
+            <label data-i18n="pin_label">PIN (only if one is set)</label>
+            <input type="text" id="live-pin" inputmode="numeric" autocomplete="off" placeholder="••••" />
+          </div>
           <div class="hint" data-i18n="liveness_hint">
             You will be asked to do two quick actions (turn your head, nod, blink…).
             That proves a real person is in front of the camera.
@@ -152,6 +156,22 @@
           <label data-i18n="who">Person</label>
           <select id="photo-name"></select>
           <div class="hint" data-i18n="photo_hint">Upload a recent photo — different clothes, place or lighting is fine.</div>
+          <div class="grid" style="margin-top:12px;gap:10px">
+            <div>
+              <label data-i18n="pin_label">PIN (only if one is set)</label>
+              <input type="text" id="photo-pin" inputmode="numeric" autocomplete="off" placeholder="••••" />
+            </div>
+            <div>
+              <label data-i18n="antispoof_label">Anti-spoofing</label>
+              <label style="display:flex;gap:8px;align-items:center;color:var(--text);font-size:13.5px;margin-top:8px">
+                <input type="checkbox" id="photo-liveness" checked />
+                <span data-i18n="antispoof_hint">reject screens &amp; printed photos</span>
+              </label>
+            </div>
+          </div>
+          <div class="hint" style="color:var(--warn)" data-i18n="upload_warning">
+            ⚠ An uploaded photo cannot prove the person is present. For real logins use the Live scan tab.
+          </div>
           <div class="row" style="margin-top:16px">
             <button class="btn" id="photo-go" onclick="verifyPhoto()" data-i18n="verify_btn">Verify photo</button>
             <button class="btn ghost" onclick="identifyPhoto()" data-i18n="identify_btn">Who is this?</button>
@@ -181,6 +201,11 @@
             Add 1–3 photos taken on different days for the best results. Only a
             mathematical template is stored — never the photo itself.
           </div>
+          <div style="margin-top:10px">
+            <label data-i18n="pin_label">PIN (only if one is set)</label>
+            <input type="text" id="enroll-pin" inputmode="numeric" autocomplete="off"
+                   placeholder="optional — blocks twins/lookalikes" />
+          </div>
           <div class="row" style="margin-top:16px">
             <button class="btn" id="enroll-go" onclick="enroll()" data-i18n="enroll_btn">Enroll person</button>
           </div>
@@ -204,6 +229,7 @@
       <b data-i18n="enrolled_people">Enrolled people</b>
       <button class="btn ghost" onclick="loadPeople()" data-i18n="refresh">Refresh</button>
     </div>
+    <div id="lookalike-warning" class="result bad" style="display:none;margin-top:12px"></div>
     <div id="people" style="margin-top:12px"></div>
   </div>
 
@@ -240,7 +266,13 @@ const I18N = {
     need_name: "Please choose a person first.",
     need_photo: "Please choose a photo first.",
     need_enroll_name: "Please type a name.",
-    need_enroll_photo: "Please add at least one photo."
+    need_enroll_photo: "Please add at least one photo.",
+    pin_label: "PIN (only if one is set)",
+    antispoof_label: "Anti-spoofing",
+    antispoof_hint: "reject screens & printed photos",
+    liveness: "liveness", runner_up: "runner-up", second_factor: "PIN",
+    replayed: "this exact photo is already enrolled",
+    upload_warning: "⚠ An uploaded photo cannot prove the person is present. For real logins use the Live scan tab."
   },
   bn: {
     tagline: "একবার নিবন্ধন করুন, যেকোনো জায়গায় যাচাই করুন। কিছুই এই কম্পিউটার ছাড়ে না।",
@@ -264,7 +296,13 @@ const I18N = {
     need_name: "আগে একজনকে বেছে নিন।",
     need_photo: "আগে একটি ছবি দিন।",
     need_enroll_name: "একটি নাম লিখুন।",
-    need_enroll_photo: "অন্তত একটি ছবি দিন।"
+    need_enroll_photo: "অন্তত একটি ছবি দিন।",
+    pin_label: "পিন (শুধু সেট করা থাকলে)",
+    antispoof_label: "প্রতারণা রোধ",
+    antispoof_hint: "স্ক্রিন ও প্রিন্ট করা ছবি বাতিল করুন",
+    liveness: "লাইভনেস", runner_up: "নিকটতম", second_factor: "পিন",
+    replayed: "এই ছবিটিই আগে নিবন্ধিত হয়েছে",
+    upload_warning: "⚠ আপলোড করা ছবি দিয়ে বোঝা যায় না মানুষটি সামনে উপস্থিত। আসল লগইনের জন্য লাইভ স্ক্যান ব্যবহার করুন।"
   }
 };
 let lang = localStorage.getItem("vf-lang") || "en";
@@ -311,8 +349,12 @@ function resultMeta(d){
   if(d.threshold !== undefined) parts.push(`${t("threshold")}: ${Number(d.threshold).toFixed(3)}`);
   if(d.confidence !== undefined) parts.push(`${t("confidence")}: ${(Number(d.confidence)*100).toFixed(1)}%`);
   if(d.quality && d.quality.passed === false) parts.push("⚠ " + (d.quality.issues||[]).join(", "));
-  if(d.liveness) parts.push("liveness: " + (d.liveness.passed ? "✔" : "✘"));
-  return parts.join(" · ");
+  if(d.liveness_status) parts.push(t("liveness") + ": " + d.liveness_status);
+  if(d.second_best) parts.push(t("runner_up") + `: ${d.second_best.identity} (${Number(d.second_best.score).toFixed(2)})`);
+  if(d.requires_second_factor) parts.push(t("second_factor") + ": " + (d.second_factor_ok ? "✔" : "✘"));
+  if(d.replayed_sample) parts.push("⚠ " + t("replayed"));
+  const reasons = (d.reasons || []).map(r => `⚠ ${r}`).join("<br>");
+  return parts.join(" · ") + (reasons ? "<br><br>" + reasons : "");
 }
 
 /* ---------- people list ---------- */
@@ -331,12 +373,26 @@ async function loadPeople(){
         <div><b>${escapeHtml(p.identity)}</b>
           <span class="pill">${p.samples ?? "?"} ${lang==="bn"?"নমুনা":"sample(s)"}</span>
           <span class="pill">${lang==="bn"?"মিল":"self-consistency"} ${(p.self_similarity??0).toFixed(2)}</span>
+          ${p.second_factor ? `<span class="pill">🔒 ${lang==="bn"?"পিন":"PIN"}</span>` : ""}
         </div>
         <button class="btn danger" onclick="removePerson('${escapeHtml(p.identity).replace(/'/g,"\\'")}')">${lang==="bn"?"মুছুন":"Delete"}</button>
       </div>`).join("") : `<div class="meta">${t("no_people")}</div>`;
   }catch(e){
     $("people").innerHTML = `<div class="meta">${escapeHtml(e.message)}</div>`;
   }
+  try{
+    const res = await fetch("/api/lookalikes"); const data = await res.json();
+    const pairs = data.pairs || [];
+    const box = $("lookalike-warning");
+    if(pairs.length){
+      box.style.display = "block";
+      box.innerHTML = `<b>⚠ ${lang==="bn"?"মিলে যাওয়া মুখ":"Lookalike alert"}</b><br>` +
+        pairs.map(p => `${escapeHtml(p.a)} ↔ ${escapeHtml(p.b)} — ${Number(p.score).toFixed(2)}`).join("<br>") +
+        `<br><span data-i18n-tip>${lang==="bn"
+          ? "যমজ/ভাই-বোন হলে দুইজনের জন্য পিন সেট করুন — তখন শুধু মুখ দেখে ঢোকা যাবে না।"
+          : "For twins/siblings set a PIN for both — the face alone will then never pass."}</span>`;
+    } else { box.style.display = "none"; }
+  }catch(e){ /* ignore */ }
 }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 async function removePerson(name){
@@ -357,7 +413,12 @@ async function verifyPhoto(){
   if(!name) return showNeutral("photo-result", t("need_name"));
   showNeutral("photo-result", `<span class="spin"></span> ${t("working")}`);
   try{
-    const d = await api("/api/verify", {name, image: photoData});
+    const d = await api("/api/verify", {
+      name, image: photoData,
+      pin: ($("photo-pin").value || "").trim() || null,
+      liveness: $("photo-liveness").checked,
+      ambiguity_guard: true
+    });
     showResult("photo-result", d.matched, d.matched ? `${t("verified")} — ${escapeHtml(name)}` : `${t("not_verified")} — ${escapeHtml(name)}`, resultMeta(d));
   }catch(e){ showResult("photo-result", false, escapeHtml(e.message), ""); }
 }
@@ -390,7 +451,10 @@ async function enroll(){
   if(!enrollImages.length) return showNeutral("enroll-result", t("need_enroll_photo"));
   showNeutral("enroll-result", `<span class="spin"></span> ${t("working")}`);
   try{
-    const d = await api("/api/enroll", {name, images: enrollImages, overwrite: true});
+    const d = await api("/api/enroll", {
+      name, images: enrollImages, overwrite: true,
+      pin: ($("enroll-pin").value || "").trim()
+    });
     showResult("enroll-result", true, `${t("enrolled_ok")}: ${escapeHtml(name)}`,
       `${d.samples} sample(s) · self-consistency ${Number(d.self_similarity).toFixed(2)} · quality ${Number(d.quality).toFixed(2)}`);
     enrollImages = []; onEnrollRender(); $("enroll-name").value = ""; loadPeople();
@@ -414,7 +478,9 @@ async function startLive(){
     return;
   }
   try{
-    const begin = await api("/api/live/begin", {name, mode:"verify", actions:2});
+    const begin = await api("/api/live/begin", {
+      name, mode:"verify", actions:2, pin: ($("live-pin").value || "").trim() || null
+    });
     sessionId = begin.session_id;
     $("live-prompt").textContent = begin.prompt;
     $("live-bar").style.width = "0%";

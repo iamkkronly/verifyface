@@ -1,6 +1,6 @@
 # Quickstart — verified in five minutes
 
-Developer: **Kaustav Kanti Ray** · [verifyface](../README.md)
+Developer: Kaustav Kanti Ray · [verifyface](../README.md)
 
 ---
 

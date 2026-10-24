@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "verifyface"
-version = "1.0.1"
+version = "1.1.0"
 description = "Face verification that anyone can use: enroll once, verify anywhere. Offline, private, and robust to changes in clothing, lighting, and background."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -56,6 +56,10 @@ fastapi = ["fastapi>=0.100", "python-multipart>=0.0.6"]
 flask = ["flask>=2.2"]
 dev = [
     "pytest>=7.0",
+    "fastapi>=0.100",
+    "python-multipart>=0.0.6",
+    "httpx>=0.24",
+    "flask>=2.2",
     "pytest-cov>=4.0",
     "build>=1.0",
     "twine>=4.0",

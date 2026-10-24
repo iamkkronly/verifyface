@@ -1,6 +1,6 @@
 # Examples
 
-Developer: **Kaustav Kanti Ray**
+Developer: Kaustav Kanti Ray
 
 Every script here runs after a single `pip install verifyface`. Run them with
 the fixtures in `../tests/fixtures` if you do not have your own photos.

@@ -259,6 +259,59 @@ def unseal(master: bytes, envelope: dict) -> dict:
     return data
 
 
+# --------------------------------------------------------------------------- #
+# Second factor (optional PIN / passphrase)
+# --------------------------------------------------------------------------- #
+PIN_MIN_LENGTH = 4
+PIN_MAX_LENGTH = 128
+_PIN_PREFIX = "scrypt"
+
+
+def validate_pin(pin: str) -> str:
+    """Normalise and validate a PIN/passphrase, raising a helpful error."""
+    from .errors import ConfigError
+
+    if not isinstance(pin, str):
+        raise ConfigError("The PIN must be text.")
+    value = pin.strip()
+    if len(value) < PIN_MIN_LENGTH:
+        raise ConfigError(f"The PIN must be at least {PIN_MIN_LENGTH} characters.")
+    if len(value) > PIN_MAX_LENGTH:
+        raise ConfigError(f"The PIN must be at most {PIN_MAX_LENGTH} characters.")
+    return value
+
+
+def hash_pin(pin: str) -> str:
+    """Hash a PIN / passphrase with scrypt and a fresh random salt.
+
+    The stored string is self-describing (``scrypt$n$r$p$salt$hash``), so the
+    parameters can be raised later without invalidating existing records.
+    """
+    value = validate_pin(pin)
+    salt = secrets.token_bytes(16)
+    derived = hashlib.scrypt(
+        value.encode("utf-8"), salt=salt, n=SCRYPT_N, r=SCRYPT_R, p=SCRYPT_P,
+        dklen=32, maxmem=128 * 1024 * 1024,
+    )
+    return f"{_PIN_PREFIX}${SCRYPT_N}${SCRYPT_R}${SCRYPT_P}${_b64(salt)}${_b64(derived)}"
+
+
+def verify_pin(pin: str, stored: str) -> bool:
+    """Constant-time check of ``pin`` against a :func:`hash_pin` record."""
+    try:
+        prefix, n, r, p, salt_b64, hash_b64 = str(stored).split("$")
+        if prefix != _PIN_PREFIX:
+            return False
+        salt, expected = _unb64(salt_b64), _unb64(hash_b64)
+        derived = hashlib.scrypt(
+            str(pin).encode("utf-8"), salt=salt, n=int(n), r=int(r), p=int(p),
+            dklen=len(expected), maxmem=128 * 1024 * 1024,
+        )
+    except Exception:
+        return False
+    return hmac.compare_digest(derived, expected)
+
+
 def fingerprint(master: bytes) -> str:
     """Short, non-reversible key fingerprint for logs and `verifyface doctor`."""
     return hashlib.sha256(master).hexdigest()[:12]
@@ -270,6 +323,10 @@ def encryption_status() -> str:
 
 __all__ = [
     "KEY_FILE",
+    "PIN_MIN_LENGTH",
+    "validate_pin",
+    "hash_pin",
+    "verify_pin",
     "KEY_ENV",
     "ALG_AES",
     "ALG_HMAC",

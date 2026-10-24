@@ -1,6 +1,6 @@
 # API reference
 
-Developer: **Kaustav Kanti Ray** · version 1.0.1
+Developer: Kaustav Kanti Ray · version 1.1.0
 
 ```python
 import verifyface as vf
@@ -43,7 +43,17 @@ r.explain()          # one human sentence
 r.as_dict()          # JSON-ready
 ```
 
-Optional: `threshold="strict"`, `adaptive=False`, `liveness=<LivenessReport>`.
+Optional parameters:
+
+| Parameter | Meaning |
+|---|---|
+| `threshold="strict"` | override the policy for this call |
+| `adaptive=False` | disable the small threshold relaxation |
+| `liveness="auto" \| "required" \| "off"` | passive anti-spoofing on the probe |
+| `pin="1234"` | second factor, when one is set for the identity |
+| `ambiguity_guard=False` | allow a pass even if a lookalike is enrolled |
+| `check_replay=False` | skip the exact-replay check |
+| `block_replay=True` | refuse instead of warn on an exact replay |
 
 ### `vf.identify(image, **kwargs) → IdentifyResult`
 
@@ -81,8 +91,19 @@ v = vf.Verifier(
     threshold="balanced",     # preset name or float
     model_dir=None,           # custom .onnx folder
     allow_download=True,      # fetch models if the bundled ones are missing
+    profile="standard",       # convenience | standard | high_security
+    require_liveness=None,    # force passive liveness on every verify()
+    ambiguity_guard=None,     # refuse twins/lookalikes (default on)
+    ambiguity_margin=None,    # default 0.06
+    block_replay=None,        # refuse an exact replay of an enrolled photo
 )
 ```
+
+| Profile | Threshold | Liveness | Ambiguity guard | Replay |
+|---|---|---|---|---|
+| `convenience` | lenient | off | off | warn |
+| `standard` | balanced | off | on | warn |
+| `high_security` | strict | required | on | blocked |
 
 | Method | Returns | Notes |
 |---|---|---|
@@ -94,7 +115,12 @@ v = vf.Verifier(
 | `identities()` | `list[str]` | |
 | `profile(name)` | `StoredProfile` | vectors, timestamps, self-consistency |
 | `remove(name)` | `bool` | |
-| `info()` | `dict` | configuration + model digests |
+| `lookalikes(threshold=0.5)` | `[(a, b, score)]` | twins/siblings detected in the gallery |
+| `set_pin(name, pin)` | `None` | second factor (scrypt-hashed, stored in the template) |
+| `clear_pin(name)` | `None` | remove the second factor |
+| `has_pin(name)` | `bool` | |
+| `check_pin(name, pin)` | `bool` | constant-time |
+| `info()` | `dict` | configuration + model digests + security posture |
 
 ### `StoredProfile`
 
@@ -141,7 +167,17 @@ r.explain()      # one sentence for a human
 ```
 
 `VerifyResult` adds `identity`, `score`, `threshold`, `base_threshold`,
-`confidence`, `threshold_name`, `quality`, `liveness`, `repaired_template`.
+`confidence`, `threshold_name`, `quality`, `liveness`, `repaired_template`, plus
+the 1.1.0 guard fields:
+
+| Field | Meaning |
+|---|---|
+| `ambiguous` | another enrolled person scores almost as high (twins) |
+| `second_best` | `(name, score)` of that runner-up |
+| `liveness_status` | `not_checked` / `passed` / `failed` |
+| `replayed_sample` | the probe is byte-identical to an enrolled photo |
+| `requires_second_factor` / `second_factor_ok` | PIN state |
+| `reasons` | every guard that refused, in plain words |
 
 `EnrollmentResult` adds `samples`, `self_similarity`, `quality`, `created`,
 `duplicates_skipped`, `skipped_images`.

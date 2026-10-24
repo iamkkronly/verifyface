@@ -1,6 +1,6 @@
 # Command line reference
 
-Developer: **Kaustav Kanti Ray**
+Developer: Kaustav Kanti Ray
 
 ```bash
 verifyface [--version] <command> [options]
@@ -38,6 +38,10 @@ verifyface verify <name> <image> [--json]
 $ verifyface verify kaustav selfie.jpg
 ✔ VERIFIED: 'kaustav' — similarity 0.612 (threshold 0.400, 97.6% confidence, very strong match)
 
+$ verifyface verify kaustav selfie.jpg --liveness auto      # reject screens/prints
+$ verifyface verify kaustav selfie.jpg --pin 1234           # second factor
+$ verifyface verify kaustav selfie.jpg --ask-pin            # prompt (hidden input)
+
 $ verifyface verify kaustav stranger.jpg ; echo $?
 ✘ NOT verified: 'kaustav' — similarity 0.131 (threshold 0.400, 1.8% confidence, different people)
 1
@@ -66,12 +70,32 @@ Stateless: nothing is stored, no name is needed.
 
 ---
 
+## `pin` / `clear-pin`
+
+```bash
+verifyface pin kaustav            # prompts twice, input hidden
+verifyface pin kaustav --pin 1234
+verifyface clear-pin kaustav
+```
+
+A PIN turns the face into one of two factors — the only reliable way to
+separate identical twins and very close siblings.
+
+## `lookalikes`
+
+```bash
+$ verifyface lookalikes
+! 1 lookalike pair(s) — twins/siblings score high here:
+  • twin_a ↔ twin_b  0.790  (guarded)
+  Advice: keep the ambiguity guard on and set a PIN for both people: verifyface pin <name>
+```
+
 ## `list`
 
 ```bash
 $ verifyface list
 vault: /home/kaustav/.verifyface/vault
-  • kaustav  2 sample(s), self-consistency 0.71, updated 2026-10-21T09:12:44+00:00
+  • kaustav 🔒 PIN  2 sample(s), self-consistency 0.71, updated 2026-10-21T09:12:44+00:00
   • রিয়া    1 sample(s), self-consistency 1.00, updated 2026-10-20T18:03:10+00:00
 ```
 
@@ -91,7 +115,7 @@ Removes the template and its backup. Asks for confirmation unless `--yes`.
 
 ```bash
 $ verifyface doctor
-verifyface v1.0.1 — Developer: Kaustav Kanti Ray
+verifyface v1.1.0 — Developer: Kaustav Kanti Ray
 python 3.13.1 • Linux-6.8-x86_64
 
   detector    ✔ model ready  face_detection_yunet_2023mar_int8bq.onnx 0.12 MB

@@ -27,7 +27,7 @@ import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -90,6 +90,8 @@ class StoredProfile:
     repaired: bool = False
     path: Optional[Path] = None
     notes: str = ""
+    has_pin: bool = False
+    source_hashes: Tuple[str, ...] = ()
 
     @property
     def sample_count(self) -> int:
@@ -103,7 +105,36 @@ class StoredProfile:
             "updated_at": self.updated_at,
             "self_similarity": round(self.self_similarity, 4),
             "repaired": self.repaired,
+            "second_factor": self.has_pin,
         }
+
+
+def robust_centroid(matrix: np.ndarray) -> np.ndarray:
+    """Unit-length weighted mean that resists one bad enrollment photo.
+
+    Each sample is weighted by how similar it is to the others, so a single
+    unlucky photo (eyes closed, motion blur, heavy angle) no longer drags the
+    identity centre towards a stranger.  With one or two samples this reduces to
+    the plain mean.
+    """
+    matrix = np.asarray(matrix, dtype=np.float32)
+    if matrix.ndim != 2 or matrix.shape[0] == 0:
+        raise ValueError("robust_centroid() needs a non-empty 2-D matrix")
+    if matrix.shape[0] <= 2:
+        mean = matrix.mean(axis=0)
+    else:
+        norms = matrix / np.maximum(np.linalg.norm(matrix, axis=1, keepdims=True), 1e-12)
+        similarity = norms @ norms.T
+        np.fill_diagonal(similarity, np.nan)
+        with np.errstate(invalid="ignore"):
+            agreement = np.nanmean(similarity, axis=1)
+        agreement = np.nan_to_num(agreement, nan=0.0)
+        # shift to positive weights, then temper so one outlier cannot dominate
+        weights = np.clip(agreement - agreement.min() + 0.05, 1e-3, None) ** 2
+        weights /= weights.sum()
+        mean = (matrix * weights[:, None]).sum(axis=0)
+    norm = float(np.linalg.norm(mean))
+    return (mean / norm if norm > 1e-12 else mean).astype(np.float32)
 
 
 class TemplateVault:
@@ -214,6 +245,8 @@ class TemplateVault:
             repaired=repaired,
             path=path,
             notes=payload.get("notes", ""),
+            has_pin=bool(payload.get("pin")),
+            source_hashes=tuple(payload.get("source_hashes") or ()),
         )
 
     # -- public API --------------------------------------------------------- #
@@ -226,6 +259,7 @@ class TemplateVault:
         notes: str = "",
         max_samples: int = 12,
         replace: bool = False,
+        source_hashes: Optional[Sequence[str]] = None,
     ) -> StoredProfile:
         """Store (or extend) the record for ``identity``."""
         identity = str(identity).strip()
@@ -239,6 +273,17 @@ class TemplateVault:
 
         existing: List[dict] = []
         created_at = utcnow()
+        pin_record = ""
+        kept_hashes: List[str] = []
+        if live.is_file() or backup.is_file():
+            try:
+                previous_payload = unseal(self.key, self._read_envelope(live if live.is_file() else backup))
+                pin_record = previous_payload.get("pin", "") or ""
+                kept_hashes = list(previous_payload.get("source_hashes", []) or [])
+            except Exception:
+                pin_record, kept_hashes = "", []
+        if replace:
+            kept_hashes = []          # the photos they described are gone
         if not replace and (live.is_file() or backup.is_file()):
             try:
                 previous = self.load(identity)
@@ -264,9 +309,7 @@ class TemplateVault:
         combined = combined[-int(max(0, max_samples)):] if max_samples else combined
 
         matrix = np.stack([np.asarray(item["vector"], dtype=np.float32) for item in combined])
-        centroid = matrix.mean(axis=0)
-        norm = float(np.linalg.norm(centroid))
-        centroid = centroid / norm if norm > 0 else centroid
+        centroid = robust_centroid(matrix)
 
         # how much an identity's own photos agree — used for adaptive thresholds
         if len(matrix) > 1:
@@ -294,6 +337,8 @@ class TemplateVault:
                 "model": "sface-2021dec-int8bq",
             },
             "notes": notes,
+            "pin": pin_record,
+            "source_hashes": (kept_hashes + list(source_hashes or []))[-24:],
         }
 
         envelope = seal(self.key, payload)
@@ -307,6 +352,48 @@ class TemplateVault:
         except OSError:  # pragma: no cover - best effort
             pass
 
+        return self._payload_to_profile(payload, repaired=False, path=live)
+
+    def load_payload(self, identity: str) -> dict:
+        """Return the verified, decrypted payload (used by the PIN check)."""
+        self.ensure()
+        live, backup = self._files(identity)
+        source = live if live.is_file() else backup
+        if not source.is_file():
+            raise IdentityNotFoundError(
+                f"No enrolled profile named {identity!r}.",
+                hint="Enroll first: verifyface.enroll(name, photo).",
+            )
+        payload = unseal(self.key, self._read_envelope(source))
+        self._validate(payload, str(identity).strip())
+        return payload
+
+    def update_fields(self, identity: str, **fields) -> StoredProfile:
+        """Change metadata (PIN, notes …) while keeping the face samples.
+
+        Used by the second-factor API: setting a PIN must never force the person
+        to enroll their face again.
+        """
+        self.ensure()
+        live, backup = self._files(identity)
+        source = live if live.is_file() else backup
+        if not source.is_file():
+            raise IdentityNotFoundError(
+                f"No enrolled profile named {identity!r}.",
+                hint="Enroll first: verifyface.enroll(name, photo).",
+            )
+        payload = unseal(self.key, self._read_envelope(source))
+        self._validate(payload, str(identity).strip())
+        payload.update(fields)
+        payload["updated_at"] = utcnow()
+        envelope = seal(self.key, payload)
+        data = json.dumps(envelope, ensure_ascii=False, indent=2).encode("utf-8")
+        self._atomic_write(live, data)
+        try:
+            shutil.copyfile(live, backup)
+            harden_path(backup)
+        except OSError:  # pragma: no cover - best effort
+            pass
         return self._payload_to_profile(payload, repaired=False, path=live)
 
     def load(self, identity: str, *, with_repair: Optional[bool] = None) -> StoredProfile:
@@ -440,4 +527,5 @@ class TemplateVault:
         }
 
 
-__all__ = ["TemplateVault", "StoredProfile", "slugify", "TEMPLATE_FORMAT_VERSION", "DIM"]
+__all__ = ["TemplateVault", "StoredProfile", "slugify", "robust_centroid",
+           "TEMPLATE_FORMAT_VERSION", "DIM"]

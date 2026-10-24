@@ -28,8 +28,10 @@ from . import _meta
 from .config import Settings, resolve_threshold
 from .engine import CompareResult, Embedding, FaceEngine
 from .errors import (
+    ConfigError,
     IdentityExistsError,
     IdentityNotFoundError,
+    LivenessCheckFailed,
     NoFaceFoundError,
     TemplateCorruptedError,
 )
@@ -37,6 +39,25 @@ from .similarity import adaptive_threshold, confidence_from_score, describe_scor
 from .store import StoredProfile, TemplateVault
 
 ImageArg = Union[str, bytes, np.ndarray, Path]
+
+
+def _image_digest(source: object) -> Optional[str]:
+    """SHA-256 of the raw bytes when the input is a file or byte string."""
+    import hashlib
+    import os
+
+    try:
+        if isinstance(source, (bytes, bytearray, memoryview)):
+            return hashlib.sha256(bytes(source)).hexdigest()
+        if isinstance(source, (str, os.PathLike)) and not str(source).lower().startswith(
+            ("http://", "https://", "data:", "base64:")
+        ):
+            path = Path(source).expanduser()
+            if path.is_file():
+                return hashlib.sha256(path.read_bytes()).hexdigest()
+    except Exception:  # pragma: no cover - never fail verification over a hash
+        return None
+    return None
 ImageList = Union[ImageArg, Sequence[ImageArg]]
 
 
@@ -99,6 +120,14 @@ class VerifyResult:
     base_threshold: Optional[float] = None
     repaired_template: bool = False
     notes: Tuple[str, ...] = field(default_factory=tuple)
+    # --- 1.1: ambiguity / liveness / second factor ------------------------
+    ambiguous: bool = False
+    second_best: Optional[Tuple[str, float]] = None
+    liveness_status: str = "not_checked"      # not_checked | passed | failed
+    replayed_sample: bool = False
+    requires_second_factor: bool = False
+    second_factor_ok: Optional[bool] = None
+    reasons: Tuple[str, ...] = field(default_factory=tuple)
 
     def __bool__(self) -> bool:
         return self.matched
@@ -116,6 +145,16 @@ class VerifyResult:
             "liveness": self.liveness.as_dict() if hasattr(self.liveness, "as_dict") else None,
             "repaired_template": self.repaired_template,
             "notes": list(self.notes),
+            "ambiguous": self.ambiguous,
+            "second_best": (
+                {"identity": self.second_best[0], "score": round(self.second_best[1], 4)}
+                if self.second_best else None
+            ),
+            "liveness_status": self.liveness_status,
+            "replayed_sample": self.replayed_sample,
+            "requires_second_factor": self.requires_second_factor,
+            "second_factor_ok": self.second_factor_ok,
+            "reasons": list(self.reasons),
             "developer": _meta.__author__,
         }
 
@@ -128,6 +167,17 @@ class VerifyResult:
         )
         if self.repaired_template:
             text += " [template auto-repaired from backup]"
+        if self.liveness_status == "failed":
+            text += " [liveness check failed — the picture may be a photo of a photo]"
+        if self.replayed_sample:
+            text += " [this exact file is one of the enrolled photos]"
+        if self.ambiguous and self.second_best:
+            text += (
+                f" [lookalike: {self.second_best[0]!r} scores "
+                f"{self.second_best[1]:.3f} too — a second factor is required]"
+            )
+        if self.requires_second_factor and not self.second_factor_ok:
+            text += " [PIN required and not supplied or wrong]"
         return text
 
 
@@ -142,6 +192,8 @@ class IdentifyResult:
     confidence: float
     ranking: List[Tuple[str, float]] = field(default_factory=list)
     quality: Optional[object] = None
+    ambiguous: bool = False
+    margin: float = 1.0
 
     def __bool__(self) -> bool:
         return self.matched
@@ -155,9 +207,17 @@ class IdentifyResult:
             "confidence": round(self.confidence, 4),
             "ranking": [(name, round(s, 4)) for name, s in self.ranking],
             "quality": self.quality.as_dict() if hasattr(self.quality, "as_dict") else None,
+            "ambiguous": self.ambiguous,
+            "margin": round(self.margin, 4),
         }
 
     def explain(self) -> str:
+        if self.ambiguous and self.ranking:
+            runner_up = self.ranking[1][0] if len(self.ranking) > 1 else "?"
+            return (
+                f"Ambiguous: {self.ranking[0][0]!r} and {runner_up!r} look almost identical "
+                f"(margin {self.margin:.3f}) — a second factor is required."
+            )
         if self.matched:
             return f"Identified as {self.identity!r} (similarity {self.score:.3f})."
         if self.ranking:
@@ -192,8 +252,55 @@ class Verifier:
         model_dir: Optional[Union[str, Path]] = None,
         allow_download: bool = True,
         settings: Optional[Settings] = None,
+        profile: Optional[str] = None,
+        require_liveness: Optional[bool] = None,
+        ambiguity_guard: Optional[bool] = None,
+        ambiguity_margin: Optional[float] = None,
+        block_replay: Optional[bool] = None,
     ) -> None:
         self.settings = settings or Settings()
+
+        # Named profiles bundle the knobs most people should not have to know.
+        presets = {
+            "convenience": {
+                "threshold": "lenient",
+                "require_liveness": False,
+                "ambiguity_guard": False,
+            },
+            "standard": {
+                "threshold": "balanced",
+                "require_liveness": False,
+                "ambiguity_guard": True,
+            },
+            "high_security": {
+                "threshold": "strict",
+                "require_liveness": True,
+                "ambiguity_guard": True,
+                "block_replay": True,
+            },
+        }
+        if profile is not None:
+            key = str(profile).strip().lower().replace("-", "_")
+            if key not in presets:
+                raise ConfigError(
+                    f"Unknown profile {profile!r}. Choose one of {', '.join(presets)}."
+                )
+            chosen = presets[key]
+            if threshold is None:
+                threshold = chosen["threshold"]
+            if require_liveness is None:
+                require_liveness = chosen["require_liveness"]
+            if ambiguity_guard is None:
+                ambiguity_guard = chosen["ambiguity_guard"]
+            if block_replay is None:
+                block_replay = chosen.get("block_replay", False)
+        self.profile_name = str(profile or "standard").strip().lower().replace("-", "_")
+        self.require_liveness = bool(require_liveness) if require_liveness is not None else False
+        self.ambiguity_guard = True if ambiguity_guard is None else bool(ambiguity_guard)
+        self.block_replay = bool(block_replay) if block_replay is not None else False
+        self.ambiguity_margin = float(
+            ambiguity_margin if ambiguity_margin is not None else self.settings.ambiguity_margin
+        )
         if vault is not None:
             self.settings.vault = Path(vault).expanduser()
         if model_dir is not None:
@@ -291,6 +398,13 @@ class Verifier:
 
         vectors = [e.vector for e in unique]
         qualities = [e.quality.score for e in unique]
+        source_hashes = []
+        if self.settings.store_source_hashes:
+            for image in images:
+                digest = _image_digest(image)
+                if digest:
+                    source_hashes.append(digest)
+
         profile = self.vault.save(
             identity,
             vectors,
@@ -298,6 +412,7 @@ class Verifier:
             notes=notes,
             max_samples=self.settings.max_samples_per_identity,
             replace=bool(overwrite),
+            source_hashes=source_hashes,
         )
         return EnrollmentResult(
             identity=identity,
@@ -328,8 +443,34 @@ class Verifier:
         threshold: Union[str, float, None] = None,
         adaptive: bool = True,
         liveness: Optional[object] = None,
+        pin: Optional[str] = None,
+        ambiguity_guard: Optional[bool] = None,
+        check_replay: bool = True,
+        block_replay: Optional[bool] = None,
     ) -> VerifyResult:
-        """Check whether ``image`` shows the person enrolled as ``identity``."""
+        """Check whether ``image`` shows the person enrolled as ``identity``.
+
+        Beyond the similarity score, four independent guards can refuse a
+        verification — each one reports *why* in ``result.reasons``:
+
+        ``liveness``
+            ``"auto"`` / ``"required"`` runs the passive anti-spoofing check on
+            the probe (a re-photographed screen or print fails it); a
+            :class:`~verifyface.liveness.LivenessReport` from a live session is
+            used as-is.  ``None`` / ``"off"`` skips the check.
+        ``ambiguity_guard``
+            Refuses when another enrolled person scores almost as high as
+            ``identity`` — the "identical twins / siblings" case.  Defaults to
+            the verifier setting.
+        ``pin``
+            Optional second factor.  When a PIN is set for the identity, a
+            missing or wrong PIN can never verify.
+        ``check_replay``
+            Flags a probe whose file is byte-identical to an enrolled photo
+            (an exact replay of a stored image).
+        """
+        from .liveness import check as liveness_check
+
         profile = self.vault.load(identity)  # raises if unknown / corrupted
         probe = self.engine.embed(image)
 
@@ -340,10 +481,74 @@ class Verifier:
 
         score = self._match_score(probe, profile)
         matched = bool(score >= cutoff)
-        if liveness is not None and getattr(liveness, "passed", True) is False:
-            matched = False
+        reasons: List[str] = []
 
-        return VerifyResult(
+        # ---- 1. exact replay of an enrolled file --------------------------
+        replayed = False
+        if check_replay and profile.source_hashes:
+            digest = _image_digest(image)
+            if digest is not None and digest in profile.source_hashes:
+                replayed = True
+                reasons.append(
+                    "this exact image is one of the enrolled photos — an uploaded copy "
+                    "cannot prove the person is present"
+                )
+
+        # ---- 2. liveness --------------------------------------------------
+        liveness_status = "not_checked"
+        liveness_report: Optional[object] = liveness
+        required = self.require_liveness
+        if isinstance(liveness, str):
+            mode = liveness.strip().lower()
+            required = mode in {"auto", "on", "true", "1", "required"}
+            liveness_report = None if mode in {"off", "none", "false", "0", ""} else True
+        if liveness_report is True or (liveness_report is None and required):
+            liveness_report = liveness_check(image)
+            required = True
+        if liveness_report is not None and hasattr(liveness_report, "passed"):
+            liveness_status = "passed" if getattr(liveness_report, "passed", False) else "failed"
+            if liveness_status == "failed":
+                matched = False
+                reasons.extend(getattr(liveness_report, "reasons", ()) or ())
+                if not reasons:
+                    reasons.append("liveness check failed")
+
+        # ---- 3. lookalike ambiguity --------------------------------------
+        guard = self.ambiguity_guard if ambiguity_guard is None else bool(ambiguity_guard)
+        second_name, second_score = self._runner_up(probe, exclude=profile.identity)
+        ambiguous = bool(
+            second_name is not None and (score - second_score) < self.ambiguity_margin
+        )
+
+        # ---- 4. second factor --------------------------------------------
+        # A correct PIN is *not* a way around the face check: it is exactly what
+        # separates two people the face cannot tell apart, so it resolves the
+        # ambiguity below instead of being blocked by it.
+        requires_pin = bool(profile.has_pin)
+        second_ok: Optional[bool] = None
+        if requires_pin:
+            second_ok = bool(pin is not None and self.check_pin(profile.identity, pin))
+            if not second_ok:
+                matched = False
+                reasons.append(
+                    "a PIN is set for this identity — supply pin=… or "
+                    "remove it with verifyface clear-pin"
+                )
+
+        if ambiguous and guard and not second_ok:
+            matched = False
+            reasons.append(
+                f"{second_name!r} looks almost identical (margin "
+                f"{score - second_score:.3f} < {self.ambiguity_margin:.2f}); "
+                "set a PIN for this identity or pass ambiguity_guard=False"
+            )
+
+        if replayed:
+            block = self.block_replay if block_replay is None else bool(block_replay)
+            if block:
+                matched = False
+
+        result = VerifyResult(
             identity=profile.identity,
             matched=matched,
             score=score,
@@ -351,10 +556,103 @@ class Verifier:
             confidence=confidence_from_score(score, cutoff),
             threshold_name=name,
             quality=probe.quality,
-            liveness=liveness,
+            liveness=liveness_report if hasattr(liveness_report, "passed") else None,
             base_threshold=base_cutoff,
             repaired_template=profile.repaired,
+            ambiguous=ambiguous,
+            second_best=(second_name, second_score) if second_name else None,
+            liveness_status=liveness_status,
+            replayed_sample=replayed,
+            requires_second_factor=requires_pin,
+            second_factor_ok=second_ok,
+            reasons=tuple(dict.fromkeys(reasons)),
         )
+
+        if required and liveness_status == "failed" and not matched:
+            # explicit request ("required") turns a soft refusal into a hard error
+            if isinstance(liveness, str) and liveness.strip().lower() == "required":
+                raise LivenessCheckFailed(result.explain())
+
+        return result
+
+    # -- helpers for the guards ------------------------------------------- #
+    def _runner_up(self, probe: Embedding, *, exclude: str) -> Tuple[Optional[str], float]:
+        """Best *other* enrolled identity (empty when nobody else is enrolled)."""
+        best_name: Optional[str] = None
+        best_score = -1.0
+        for name in self.vault.identities():
+            if name == exclude:
+                continue
+            try:
+                other = self.vault.load(name)
+            except Exception:
+                continue
+            score = self._match_score(probe, other)
+            if score > best_score:
+                best_name, best_score = other.identity, score
+        if best_name is None:
+            return None, 0.0
+        return best_name, float(best_score)
+
+    def lookalikes(self, threshold: float = 0.5) -> List[Tuple[str, str, float]]:
+        """Enrolled pairs that are too similar to be told apart reliably.
+
+        Identical twins, siblings and very close lookalikes will show up here.
+        The right response is a second factor (a PIN), not a higher threshold.
+        """
+        names = self.vault.identities()
+        pairs: List[Tuple[str, str, float]] = []
+        for i, first in enumerate(names):
+            try:
+                a = self.vault.load(first)
+            except Exception:
+                continue
+            for second in names[i + 1:]:
+                try:
+                    b = self.vault.load(second)
+                except Exception:
+                    continue
+                pair_score = max(
+                    self.engine.similarity(a.centroid, b.centroid),
+                    max(
+                        (self.engine.similarity(s, b.centroid) for s in a.samples),
+                        default=-1.0,
+                    ),
+                )
+                if pair_score >= threshold:
+                    pairs.append((a.identity, b.identity, float(pair_score)))
+        pairs.sort(key=lambda item: item[2], reverse=True)
+        return pairs
+
+    # -- second factor ------------------------------------------------------ #
+    def set_pin(self, identity: str, pin: str) -> None:
+        """Attach a PIN / passphrase to an enrolled identity."""
+        from .security import hash_pin, validate_pin
+
+        validate_pin(pin)
+        self.vault.update_fields(identity, pin=hash_pin(pin))
+
+    def clear_pin(self, identity: str) -> None:
+        """Remove the PIN from an identity."""
+        self.vault.update_fields(identity, pin="")
+
+    def has_pin(self, identity: str) -> bool:
+        return bool(self.vault.load(identity).has_pin)
+
+    def check_pin(self, identity: str, pin: Optional[str]) -> bool:
+        """Constant-time check of a PIN without revealing whether it exists."""
+        from .security import verify_pin as _verify
+
+        if not pin:
+            return False
+        try:
+            record = self.vault.load(identity)
+        except (IdentityNotFoundError, TemplateCorruptedError):
+            return False
+        if not record.has_pin:
+            return False
+        payload = self.vault.load_payload(identity)
+        return _verify(pin, str(payload.get("pin", "")))
 
     def verify_any(
         self,
@@ -395,7 +693,14 @@ class Verifier:
         ranking.sort(key=lambda item: item[1], reverse=True)
 
         best_name, best_score = (ranking[0] if ranking else (None, 0.0))
+        margin = 1.0
+        ambiguous = False
+        if len(ranking) > 1:
+            margin = float(best_score - ranking[1][1])
+            ambiguous = margin < self.ambiguity_margin
         matched = bool(best_name is not None and best_score >= cutoff)
+        if ambiguous and self.ambiguity_guard:
+            matched = False
         return IdentifyResult(
             identity=best_name if matched else None,
             matched=matched,
@@ -404,6 +709,8 @@ class Verifier:
             confidence=confidence_from_score(float(best_score), cutoff),
             ranking=ranking[:10],
             quality=probe.quality,
+            ambiguous=ambiguous,
+            margin=margin,
         )
 
     def compare(
@@ -437,6 +744,11 @@ class Verifier:
             "vault": str(self.vault.path),
             "threshold": self.threshold,
             "threshold_name": self.threshold_name,
+            "profile": self.profile_name,
+            "require_liveness": self.require_liveness,
+            "ambiguity_guard": self.ambiguity_guard,
+            "ambiguity_margin": self.ambiguity_margin,
+            "block_replay": self.block_replay,
             "identities": len(self.vault.identities()),
             "engine": self.engine.info(),
         }
